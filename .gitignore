@@ -1,0 +1,19 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / extension build output
+node_modules/
+extension/dist/
+extension/media/webview/
+
+# Environment and secrets
+.env
+*.env
+
+# Misc
+.vscode-test/
+*.log
+.DS_Store

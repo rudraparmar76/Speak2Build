@@ -1,0 +1,59 @@
+{
+  "name": "speak2build",
+  "displayName": "Speak2Build",
+  "description": "Speech-to-verified-code assistant for Python projects",
+  "version": "0.1.0",
+  "publisher": "speak2build",
+  "private": true,
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "speak2build",
+          "title": "Speak2Build",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "speak2build": [
+        {
+          "type": "webview",
+          "id": "speak2build.sidebar",
+          "name": "Speak2Build"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Speak2Build",
+      "properties": {
+        "speak2build.backendUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Base URL of the local Speak2Build backend service."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.96.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}
