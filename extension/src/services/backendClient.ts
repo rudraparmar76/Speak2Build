@@ -19,6 +19,14 @@ interface PingResponse {
   timestamp: number;
 }
 
+export interface AudioUploadResult {
+  audio_id: string;
+  duration_seconds: number;
+  sample_rate: number;
+  channels: number;
+  size_bytes: number;
+}
+
 export class BackendClient {
   private readonly baseUrl: string;
 
@@ -47,6 +55,17 @@ export class BackendClient {
       body: JSON.stringify({ message }),
     });
     return data.echo;
+  }
+
+  /** Upload raw WAV bytes. The body is binary; no base64 over HTTP. */
+  async uploadAudio(bytes: Uint8Array): Promise<AudioUploadResult> {
+    return await this.request<AudioUploadResult>("POST", "/api/audio", {
+      // Runtime accepts any ArrayBufferView as a body; the DOM lib typings
+      // are stricter than the fetch implementations here (SharedArrayBuffer
+      // concern), so this boundary cast documents that gap.
+      body: bytes as unknown as BodyInit,
+      headers: { "Content-Type": "audio/wav" },
+    });
   }
 
   private async request<T>(method: string, path: string, init?: RequestInit): Promise<T> {

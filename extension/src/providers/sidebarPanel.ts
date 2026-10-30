@@ -62,6 +62,31 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           this.post({ type: "pingResult", reply });
           break;
         }
+        case "uploadAudio": {
+          // Decode the base64 recorded by the webview back into binary.
+          const bytes = Buffer.from(message.data, "base64");
+          if (bytes.length === 0) {
+            throw new Error("Received an empty audio payload from the sidebar.");
+          }
+          // Defense in depth: the backend enforces this limit too, but
+          // failing here avoids a pointless large HTTP round-trip.
+          const maxBytes = 20 * 1024 * 1024;
+          if (bytes.length > maxBytes) {
+            throw new Error(
+              `Recording is ${Math.round(bytes.length / (1024 * 1024))} MB; the limit is ${maxBytes / (1024 * 1024)} MB.`,
+            );
+          }
+          const result = await client.uploadAudio(bytes);
+          this.post({
+            type: "audioUploaded",
+            audioId: result.audio_id,
+            durationSeconds: result.duration_seconds,
+            sampleRate: result.sample_rate,
+            channels: result.channels,
+            sizeBytes: result.size_bytes,
+          });
+          break;
+        }
         default: {
           // Exhaustiveness guard: if a new WebviewToHost variant is added
           // without a case here, TypeScript flags this as an unhandled type.

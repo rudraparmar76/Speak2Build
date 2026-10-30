@@ -66,6 +66,33 @@ Response `200`: `{ "status": "ok", "version": "0.1.0" }`
 Request: `{ "message": string (1–2000 chars) }` → `422` if invalid.
 Response `200`: `{ "echo": string, "received_chars": int, "timestamp": float }`
 
+### `POST /api/audio`
+Request body: raw WAV bytes. Validated: size ≤ 20 MB → `413`; RIFF/WAVE PCM
+magic + fmt chunk checks → `415`; empty → `400`. Stored at
+`<TEMP>/speak2build-audio/<uuid>.wav`; the `audio_id` (uuid hex) is the only
+handle, and `audio_store.path_for()` re-validates its format before any path
+construction. Response `201`: `AudioUploadResponse` (id, duration, rate,
+channels, size).
+
+## Webview Recording Pipeline (Milestone 1)
+
+```
+MediaRecorder (webm/opus chunks, 250 ms)
+  → Blob
+  → AudioContext.decodeAudioData        (container → PCM, in-browser)
+  → OfflineAudioContext(1, n, 16000)    (downmix mono + resample 16 kHz)
+  → encodeWav (manual RIFF/PCM16 writer)
+  → base64 string ──postMessage──▶ host Buffer.from(b64)
+  → POST /api/audio (raw bytes) ─▶ backend validates + stores
+  ◀── audioUploaded {audioId, durationSeconds, sampleRate, channels, sizeBytes}
+```
+
+Decision: conversion happens in the webview so the backend needs no FFmpeg;
+the stored file is exactly what faster-whisper consumes in M2. Trade-off:
+recordings are stored as WAV (≈32 KB/s) instead of opus (~4 KB/s) — bounded
+by the 2-minute/20 MB caps and irrelevant on loopback.
+
+
 ## Key Design Decisions
 
 1. **Local FastAPI sidecar, not in-process Python.** The extension host is Node;

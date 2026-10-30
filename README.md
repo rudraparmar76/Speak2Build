@@ -18,7 +18,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | Milestone | Feature | Status |
 |:---:|---|:---:|
 | 0 | Extension ↔ React sidebar ↔ FastAPI backend connection | ✅ Done |
-| 1 | Voice recording + audio upload | Planned |
+| 1 | Voice recording + audio upload | ✅ Done |
 | 2 | faster-whisper transcription + editable transcript | Planned |
 | 3 | LLM requirement extraction, ambiguity detection, clarifications | Planned |
 | 4 | Project context inspection (safe, bounded) | Planned |
@@ -59,7 +59,13 @@ The backend listens on `http://127.0.0.1:8000` (loopback only).
 Open the repository root in VS Code and press **F5** ("Run Speak2Build
 Extension"). A new VS Code window starts with the extension loaded. Click the
 Speak2Build icon in the Activity Bar (left side). The panel shows the backend
-connection status and a ping test form.
+connection status, a voice recorder, and a ping test form.
+
+Recording: press **Record** (allow the microphone when VS Code asks), speak,
+press **Stop**. The recording is converted to 16 kHz mono WAV inside the
+webview, uploaded to the backend, and its metadata appears in the panel.
+Capability: Milestone 1 stores recordings only — transcription arrives in
+Milestone 2.
 
 If the backend URL differs from the default, change the
 `speak2build.backendUrl` setting in the debug window.
@@ -80,11 +86,12 @@ npm run build        # esbuild → dist/extension.js + media/webview/*
 npm run typecheck    # tsc --noEmit
 ```
 
-## Current Limitations (Milestone 0)
+## Current Limitations (Milestone 1)
 
-- Only the connection check (health + echo ping) is implemented; no voice,
-  transcription, or code generation yet.
+- Recordings are stored by the backend but not yet transcribed (faster-whisper
+  arrives in Milestone 2); the sidebar currently shows upload metadata only.
 - The backend has no authentication — it is intentionally loopback-only.
 - The sidebar must be opened once for the health check to run; the webview
   is created lazily by VS Code.
-- Markdown/API docs beyond this README come with later milestones.
+- The 2-minute / 20 MB recording caps are MVP bounds; longer dictation would
+  need chunked upload (deliberately deferred).

@@ -13,11 +13,14 @@
 
 export type WebviewToHost =
   | { type: "checkHealth" }
-  | { type: "ping"; message: string };
+  | { type: "ping"; message: string }
+  /** `data` is a base64-encoded 16 kHz mono WAV recording. */
+  | { type: "uploadAudio"; data: string };
 
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string }
   | { type: "pingResult"; reply: string }
+  | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */
