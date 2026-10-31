@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RecorderCard, type RecorderState } from "./components/RecorderCard";
 import { getVsCodeApi } from "./bridge";
@@ -83,7 +83,9 @@ export function App() {
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [applyingDiff, setApplyingDiff] = useState<string | null>(null);
-  const [applyError, setApplyError] = useState<string | null>(null);
+  const [appliedDiffs, setAppliedDiffs] = useState<Set<string>>(new Set());
+  const [applyError, setApplyError] = useState<{ diff: string; message: string } | null>(null);
+  const applyingDiffRef = useRef<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -234,12 +236,20 @@ export function App() {
           break;
         }
         case "diffApplied": {
+          const currentDiff = applyingDiffRef.current;
           setApplyingDiff(null);
-          setApplyError(null);
           if (message.success) {
+            if (currentDiff) {
+              setAppliedDiffs((prev) => new Set(prev).add(currentDiff));
+            }
+            setApplyError(null);
             pushHistory(`Diff applied: ${message.affectedFiles.join(", ")}`);
           } else {
-            setApplyError(message.message);
+            setApplyError(
+              currentDiff
+                ? { diff: currentDiff, message: message.message }
+                : { diff: "", message: message.message }
+            );
             pushHistory(`Diff apply failed: ${message.message}`);
           }
           break;
@@ -296,13 +306,15 @@ export function App() {
       }
       setExtracting(true);
       setExtractError(null);
+      const snippets = relevantResult?.snippets;
       vscode.postMessage({
         type: "extractRequirements",
         transcript: transcript.text,
         ...(answers && Object.keys(answers).length > 0 ? { answers } : {}),
+        ...(snippets && snippets.length > 0 ? { contextSnippets: snippets } : {}),
       });
     },
-    [transcript],
+    [transcript, relevantResult],
   );
 
   const updateAnswer = useCallback((question: string, value: string) => {
@@ -364,6 +376,7 @@ export function App() {
 
   const applyDiff = useCallback((unifiedDiff: string) => {
     // The host will resolve the workspace root from VS Code workspace folders
+    applyingDiffRef.current = unifiedDiff;
     setApplyingDiff(unifiedDiff);
     setApplyError(null);
     vscode.postMessage({
@@ -577,10 +590,15 @@ export function App() {
                 disabled={
                   status !== "online" ||
                   extracting ||
-                  Object.values(extractAnswers).every((a) => a.trim().length === 0)
+                  (Object.values(extractAnswers).every((a) => a.trim().length === 0) &&
+                    (!relevantResult || relevantResult.snippets.length === 0))
                 }
               >
-                {extracting ? "Extracting…" : "⚙ Re-extract with answers"}
+                {extracting
+                  ? "Extracting…"
+                  : relevantResult && relevantResult.snippets.length > 0
+                  ? "⚙ Re-extract with context & answers"
+                  : "⚙ Re-extract with answers"}
               </button>
             </div>
           )}
@@ -639,6 +657,17 @@ export function App() {
 
           {renderSnippets()}
 
+          {relevantResult && relevantResult.snippets.length > 0 && requirement && (
+            <button
+              className="button"
+              style={{ marginTop: "8px" }}
+              onClick={() => extractRequirements(extractAnswers)}
+              disabled={status !== "online" || extracting}
+            >
+              {extracting ? "Updating requirements…" : "🔄 Update requirements using selected context"}
+            </button>
+          )}
+
           {requirement && relevantResult && relevantResult.snippets.length > 0 && (
             <section className="card">
               <div className="label">Code Generation</div>
@@ -678,26 +707,30 @@ export function App() {
                   </ul>
                 </div>
               )}
-              {generationResult.diffs.map((diff: FileDiff, index: number) => (
-                <div key={index} className="diff-card">
-                  <div className="diff-header">
-                    <span className="diff-path">{diff.path}</span>
-                    <span className="hint">({diff.language})</span>
-                    {diff.isNewFile && <span className="badge new-file">New file</span>}
+              {generationResult.diffs.map((diff: FileDiff, index: number) => {
+                const isApplying = applyingDiff === diff.unifiedDiff;
+                const isApplied = appliedDiffs.has(diff.unifiedDiff);
+                const hasError = applyError?.diff === diff.unifiedDiff;
+                return (
+                  <div key={index} className="diff-card">
+                    <div className="diff-header">
+                      <span className="diff-path">{diff.path}</span>
+                      <span className="hint">({diff.language})</span>
+                      {diff.isNewFile && <span className="badge new-file">New file</span>}
+                      {isApplied && <span className="badge applied">✓ Applied</span>}
+                    </div>
+                    <pre className="diff-content">{diff.unifiedDiff}</pre>
+                    <button
+                      className="button"
+                      onClick={() => applyDiff(diff.unifiedDiff)}
+                      disabled={status !== "online" || isApplying || isApplied}
+                    >
+                      {isApplying ? "Applying…" : isApplied ? "✓ Applied" : "✓ Apply this diff"}
+                    </button>
+                    {hasError && <p className="error-text">{applyError.message}</p>}
                   </div>
-                  <pre className="diff-content">{diff.unifiedDiff}</pre>
-                  <button
-                    className="button"
-                    onClick={() => applyDiff(diff.unifiedDiff)}
-                    disabled={status !== "online" || applyingDiff === diff.unifiedDiff}
-                  >
-                    {applyingDiff === diff.unifiedDiff ? "Applying…" : "✓ Apply this diff"}
-                  </button>
-                  {applyError && applyingDiff === diff.unifiedDiff && (
-                    <p className="error-text">{applyError}</p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </section>
           )}
 

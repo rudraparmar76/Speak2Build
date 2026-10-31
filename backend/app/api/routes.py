@@ -199,7 +199,15 @@ def extract_requirements(payload: ExtractRequest) -> ExtractionResponse:
             ),
         )
     try:
-        outcome = requirements_service.extract_from(payload.transcript, payload.answers)
+        if payload.context_snippets:
+            try:
+                outcome = requirements_service.extract_from(
+                    payload.transcript, payload.answers, payload.context_snippets
+                )
+            except TypeError:
+                outcome = requirements_service.extract_from(payload.transcript, payload.answers)
+        else:
+            outcome = requirements_service.extract_from(payload.transcript, payload.answers)
     except LLMUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except LLMRequestError as exc:
@@ -265,16 +273,18 @@ def generate_code(payload: GenerateRequest) -> GenerateResponse:
             detail="No LLM configured. Set SPEAK2BUILD_LLM_MODEL and restart backend.",
         )
 
-    # Determine workspace root from context snippets or use CWD
-    workspace_root = Path.cwd()
-    if payload.context_snippets:
-        # Try to find common workspace root from snippet paths
-        first_path = payload.context_snippets[0].get("path", "")
-        if first_path:
-            # Heuristic: workspace is parent of first few path components
-            parts = Path(first_path).parts
-            if len(parts) >= 2:
-                workspace_root = Path(*parts[:2]).resolve()
+    # Determine workspace root from payload, or default to CWD
+    if payload.workspace_root:
+        workspace_root = Path(payload.workspace_root).resolve()
+    else:
+        workspace_root = Path.cwd()
+
+    # Safety: ensure workspace_root is a valid directory
+    if not workspace_root.is_dir():
+        if workspace_root.is_file():
+            workspace_root = workspace_root.parent
+        else:
+            workspace_root = Path.cwd()
 
     try:
         outcome = generation_service.generate_code(

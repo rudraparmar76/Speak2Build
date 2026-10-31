@@ -399,6 +399,16 @@ body {
   text-transform: uppercase;
 }
 
+.badge.applied {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #238636;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
 .diff-content {
   margin: 0;
   padding: 10px;

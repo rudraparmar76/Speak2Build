@@ -110,6 +110,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           const extraction = await client.extractRequirements(
             message.transcript,
             message.answers,
+            message.contextSnippets,
           );
           this.post({
             type: "requirements",
@@ -202,10 +203,12 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             });
             return;
           }
+          const workspaceRoot = folders[0].uri.fsPath;
           const result = await client.generateCode(
             message.requirementText,
             message.contextSnippets,
             message.options,
+            workspaceRoot,
           );
           this.post({
             type: "generationResult",

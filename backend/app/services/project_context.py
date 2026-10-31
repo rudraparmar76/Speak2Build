@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from app.services.code_generation import read_file_safe
+
 # Language detection by extension (common, not exhaustive)
 EXT_TO_LANG = {
     ".py": "python",
@@ -238,10 +240,7 @@ def extract_snippet(
     - Total capped at max_lines
     Returns (content, start_line, end_line) 1-indexed.
     """
-    try:
-        text = file_path.read_text(encoding="utf-8", errors="ignore")
-    except (OSError, UnicodeDecodeError):
-        return "", 0, 0
+    text = read_file_safe(file_path)
 
     lines = text.splitlines()
     total = len(lines)
@@ -292,10 +291,7 @@ def select_relevant_files(
 
         lang = detect_language(abs_path)
         # Read content for scoring (sampled)
-        try:
-            content_sample = abs_path.read_text(encoding="utf-8", errors="ignore")[:5000]
-        except (OSError, UnicodeDecodeError):
-            content_sample = ""
+        content_sample = read_file_safe(abs_path)[:5000]
 
         score = score_relevance(requirement_text, rel_path, content_sample)
         scored.append((score, rel_path, lang, abs_path))

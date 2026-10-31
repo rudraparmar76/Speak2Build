@@ -112,6 +112,16 @@ def test_answers_prompt_contains_qa_block():
     assert "Q1" in llm.calls[0]["user"]
 
 
+def test_context_snippets_in_prompt():
+    llm = FakeLLM([VALID])
+    snippets = [{"path": "src/main.py", "content": "from flask import Flask", "start_line": 1, "end_line": 10}]
+    req.RequirementsService(llm, model_name="fake").extract("t", context_snippets=snippets)
+
+    assert "PROJECT CONTEXT" in llm.calls[0]["user"]
+    assert "src/main.py" in llm.calls[0]["user"]
+    assert "from flask import Flask" in llm.calls[0]["user"]
+
+
 def test_parse_requires_object():
     with pytest.raises(ValueError):
         req._parse_requirement("[1, 2, 3]")

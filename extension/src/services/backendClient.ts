@@ -201,14 +201,20 @@ export class BackendClient {
   /**
    * Extract structured requirements from the edited transcript.
    * Optional `answers` re-runs extraction after clarification rounds.
+   * Optional `contextSnippets` provides project code context to avoid
+   * asking for existing code in clarification questions.
    */
   async extractRequirements(
     transcript: string,
     answers?: Record<string, string>,
+    contextSnippets?: Snippet[],
   ): Promise<RequirementsApiResponse> {
     const body: Record<string, unknown> = { transcript };
     if (answers && Object.keys(answers).length > 0) {
       body.answers = answers;
+    }
+    if (contextSnippets && contextSnippets.length > 0) {
+      body.context_snippets = contextSnippets;
     }
     return await this.request<RequirementsApiResponse>(
       "POST",
@@ -260,6 +266,7 @@ export class BackendClient {
     requirementText: string,
     contextSnippets: Snippet[],
     options?: GenerationOptions,
+    workspaceRoot?: string,
   ): Promise<GenerationApiResponse> {
     return await this.request<GenerationApiResponse>(
       "POST",
@@ -270,6 +277,7 @@ export class BackendClient {
           requirement_text: requirementText,
           context_snippets: contextSnippets,
           options: options || {},
+          workspace_root: workspaceRoot,
         }),
       },
       GENERATION_TIMEOUT_MS,

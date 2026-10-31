@@ -35,10 +35,20 @@ Respond with ONLY a JSON object — no markdown fences, no commentary:
 Rules:
 - Fold explicit developer answers below into the requirement as facts, and do
   NOT re-ask anything already answered.
-- Only state facts that were said or are unavoidable defaults; everything that
-  needs a human decision becomes a `clarifications` entry.
+- If PROJECT CONTEXT is provided, inspect the existing code to determine the framework
+  (e.g., Flask vs FastAPI), existing endpoints, parameter styles, and conventions.
+  Align the task, inputs, and outputs with the actual codebase.
+- NEVER ask the developer to share, paste, or provide existing code, endpoint signatures,
+  or file structures in clarification questions (e.g., do NOT ask "Please share the code"
+  or "What is the endpoint signature?"). In Speak2Build, existing code is inspected directly
+  from the workspace.
+- If existing code is not yet provided, do NOT ask the developer to paste code; assume standard
+  conventions or defer implementation details to the code inspection and generation phase.
+- Clarifications must ONLY be asked for genuine business logic, user experience, or product
+  decisions that cannot be inferred from the codebase (e.g., edge-case behavior, business rules).
+- Keep clarifications concise (prefer at most 2-3 essential questions; do not overwhelm the developer).
 - Every clarification must be a single, individually answerable question.
-- If the request is already fully specified, `clarifications` must be [].
+- If the request is already fully specified or clear from context, `clarifications` must be [].
 - Language is "python" (MVP).
 """
 
@@ -63,8 +73,23 @@ def strip_code_fences(raw: str) -> str:
     return match.group(1) if match else raw.strip()
 
 
-def build_user_prompt(transcript: str, answers: dict[str, str] | None) -> str:
+def build_user_prompt(
+    transcript: str,
+    answers: dict[str, str] | None,
+    context_snippets: list[dict] | None = None,
+) -> str:
     parts = [f"TRANSCRIPT:\n\"\"\"\n{transcript}\n\"\"\""]
+    if context_snippets:
+        snippets_text = []
+        for s in context_snippets:
+            path = s.get("path", "file")
+            content = s.get("content", "")
+            start = s.get("start_line", s.get("startLine", 1))
+            end = s.get("end_line", s.get("endLine", "?"))
+            snippets_text.append(f"--- {path} (lines {start}-{end}) ---\n{content}")
+        parts.append(
+            "PROJECT CONTEXT (existing code from workspace):\n" + "\n\n".join(snippets_text)
+        )
     if answers:
         qa = "\n".join(f"- Q: {q}\n  A: {a}" for q, a in answers.items())
         parts.append(
@@ -80,11 +105,14 @@ class RequirementsService:
         self._max_attempts = max_attempts
 
     def extract(
-        self, transcript: str, answers: dict[str, str] | None = None
+        self,
+        transcript: str,
+        answers: dict[str, str] | None = None,
+        context_snippets: list[dict] | None = None,
     ) -> ExtractionOutcome:
         started = time.monotonic()
         system = SYSTEM_PROMPT
-        user = build_user_prompt(transcript, answers)
+        user = build_user_prompt(transcript, answers, context_snippets)
 
         feedback: str | None = None
         for attempt in range(1, self._max_attempts + 1):
@@ -168,7 +196,11 @@ def is_configured() -> bool:
     return bool(load_config_from_env().model)
 
 
-def extract_from(transcript: str, answers: dict[str, str] | None = None) -> ExtractionOutcome:
+def extract_from(
+    transcript: str,
+    answers: dict[str, str] | None = None,
+    context_snippets: list[dict] | None = None,
+) -> ExtractionOutcome:
     from app.services.llm_client import load_config_from_env
 
     config = load_config_from_env()
@@ -180,7 +212,7 @@ def extract_from(transcript: str, answers: dict[str, str] | None = None) -> Extr
     from app.services.llm_client import OpenAICompatibleLLM
 
     service = RequirementsService(OpenAICompatibleLLM(config), model_name=config.model)
-    return service.extract(transcript, answers)
+    return service.extract(transcript, answers, context_snippets)
 
 
 __all__ = [

@@ -17,7 +17,12 @@ export type WebviewToHost =
   /** Transcribe a stored recording by id. */
   | { type: "transcribe"; audioId: string }
   /** Extract structured requirements from the (edited) transcript. */
-  | { type: "extractRequirements"; transcript: string; answers?: Record<string, string> }
+  | {
+      type: "extractRequirements";
+      transcript: string;
+      answers?: Record<string, string>;
+      contextSnippets?: Snippet[];
+    }
   /** Scan workspace for project context. */
   | { type: "scanContext"; workspaceRoot: string }
   /** Request relevant snippets from user-selected files. */

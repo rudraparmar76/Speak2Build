@@ -127,3 +127,30 @@ def test_answers_passed_through(monkeypatch):
 
     assert response.status_code == 200
     assert seen["answers"] == {"Where stored?": "Postgres"}
+
+
+def test_context_snippets_passed_through(monkeypatch):
+    seen = {}
+
+    def fake_extract(transcript, answers=None, context_snippets=None):
+        seen["snippets"] = context_snippets
+        return requirements.ExtractionOutcome(
+            requirement=requirements.RequirementModel(task="t"),
+            model="m",
+            processing_seconds=0.1,
+            repaired=False,
+        )
+
+    monkeypatch.setattr(requirements, "is_configured", lambda: True)
+    monkeypatch.setattr(requirements, "extract_from", fake_extract)
+
+    response = client.post(
+        "/api/requirements",
+        json={
+            "transcript": "abc",
+            "context_snippets": [{"path": "main.py", "content": "hello"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert seen["snippets"] == [{"path": "main.py", "content": "hello"}]

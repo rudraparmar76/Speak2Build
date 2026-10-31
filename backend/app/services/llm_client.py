@@ -14,10 +14,14 @@ without code changes):
 """
 
 import dataclasses
+import logging
 import os
+import time
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # Load .env from the backend directory so local dev works without `setx`
 try:
@@ -33,6 +37,11 @@ TIMEOUT_ENV = "SPEAK2BUILD_LLM_TIMEOUT"
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_TIMEOUT_SECONDS = 60.0
+
+# Retry configuration for transient errors (429 rate-limit, 5xx server errors)
+MAX_RETRIES = 3
+BASE_RETRY_DELAY_SECONDS = 2.0  # doubles each attempt: 2s → 4s → 8s
+RETRIABLE_STATUS_CODES = {429, 500, 502, 503}
 
 
 class LLMError(Exception):
@@ -107,35 +116,75 @@ class OpenAICompatibleLLM:
         }
         url = f"{self._config.base_url}/chat/completions"
 
-        try:
-            # Per-call Client so the test seam (transport) can be honored;
-            # connection reuse is not meaningful at this call frequency.
-            with httpx.Client(
-                timeout=self._config.timeout_seconds,
-                transport=self._transport,
-            ) as http:
-                response = http.post(url, headers=headers, json=body)
-        except httpx.TimeoutException as exc:
-            raise LLMRequestError(
-                f"LLM request timed out after {self._config.timeout_seconds}s"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise LLMUnavailableError(
-                f"Cannot reach the LLM at {self._config.base_url}: {exc}"
-            ) from exc
+        last_error: Exception | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                # Per-call Client so the test seam (transport) can be honored;
+                # connection reuse is not meaningful at this call frequency.
+                with httpx.Client(
+                    timeout=self._config.timeout_seconds,
+                    transport=self._transport,
+                ) as http:
+                    response = http.post(url, headers=headers, json=body)
+            except httpx.TimeoutException as exc:
+                last_error = LLMRequestError(
+                    f"LLM request timed out after {self._config.timeout_seconds}s"
+                )
+                last_error.__cause__ = exc
+                # Timeouts are retriable
+                if attempt < MAX_RETRIES:
+                    delay = BASE_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+                    logger.warning(
+                        "LLM timeout on attempt %d/%d, retrying in %.1fs",
+                        attempt, MAX_RETRIES, delay,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise last_error from exc
+            except httpx.HTTPError as exc:
+                raise LLMUnavailableError(
+                    f"Cannot reach the LLM at {self._config.base_url}: {exc}"
+                ) from exc
 
-        if response.status_code != 200:
-            raise LLMRequestError(
-                f"LLM provider returned HTTP {response.status_code}: {response.text[:300]}"
-            )
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LLMRequestError("LLM provider returned a non-JSON body") from exc
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LLMRequestError(f"Unexpected response shape: {str(data)[:200]}") from exc
-        if not content:
-            raise LLMRequestError("LLM returned an empty completion")
-        return content
+            # Retry on rate-limit (429) and server errors (5xx)
+            if response.status_code in RETRIABLE_STATUS_CODES and attempt < MAX_RETRIES:
+                # Respect Retry-After header if present, else exponential backoff
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        delay = max(1.0, float(retry_after))
+                    except ValueError:
+                        delay = BASE_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+                else:
+                    delay = BASE_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+                logger.warning(
+                    "LLM provider returned HTTP %d on attempt %d/%d, "
+                    "retrying in %.1fs...",
+                    response.status_code, attempt, MAX_RETRIES, delay,
+                )
+                time.sleep(delay)
+                continue
+
+            if response.status_code != 200:
+                raise LLMRequestError(
+                    f"LLM provider returned HTTP {response.status_code}: "
+                    f"{response.text[:300]}"
+                )
+
+            # Success — parse the response
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise LLMRequestError("LLM provider returned a non-JSON body") from exc
+            try:
+                content = data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise LLMRequestError(
+                    f"Unexpected response shape: {str(data)[:200]}"
+                ) from exc
+            if not content:
+                raise LLMRequestError("LLM returned an empty completion")
+            return content
+
+        # Should not reach here, but just in case
+        raise last_error or LLMRequestError("LLM request failed after all retries")

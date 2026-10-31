@@ -17,6 +17,7 @@ class GenerateRequest(BaseModel):
     requirement_text: str = Field(min_length=1, max_length=8000)
     context_snippets: list[dict] = Field(default_factory=list)
     options: dict = Field(default_factory=dict)
+    workspace_root: Optional[str] = None
 
 
 class GenerateResponse(BaseModel):
