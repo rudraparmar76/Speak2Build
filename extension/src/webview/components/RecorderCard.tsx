@@ -39,7 +39,11 @@ function describeMicError(error: unknown): string {
     switch (error.name) {
       case "NotAllowedError":
       case "SecurityError":
-        return "Microphone access was denied. Allow the mic for VS Code and try again.";
+        return (
+          "Microphone access was denied at the webview layer. " +
+          "Check for a VS Code 'Allow microphone' prompt near the top of this window; " +
+          "if none appeared, reload this window (F1 → Developer: Reload Window) and click Record once."
+        );
       case "NotFoundError":
       case "OverconstrainedError":
         return "No microphone was found on this machine.";
@@ -50,6 +54,33 @@ function describeMicError(error: unknown): string {
     }
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Ask Chromium what it thinks about mic access before/after a failure.
+ * This turns 'access was denied' into actionable facts: Chromium tracks a
+ * permission state ('granted' | 'denied' | 'prompt') per origin, and the
+ * webview's state can disagree with VS Code's or Windows'.
+ */
+async function collectMicDiagnostics(): Promise<string> {
+  const parts: string[] = [];
+  if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+    return "diagnosis: navigator.mediaDevices unavailable in this webview";
+  }
+  try {
+    const status = await navigator.permissions.query({
+      name: "microphone" as PermissionName,
+    });
+    parts.push(`chromium mic permission = ${status.state}`);
+  } catch {
+    parts.push("chromium mic permission = unknown (Permissions API not supported here)");
+  }
+  if (typeof navigator.mediaDevices.getUserMedia === "function") {
+    parts.push("getUserMedia = available");
+  } else {
+    parts.push("getUserMedia = missing");
+  }
+  return `diagnosis: ${parts.join(", ")}`;
 }
 
 async function convertToWavBase64(chunks: Blob[], mimeType: string): Promise<string> {
@@ -193,7 +224,10 @@ export function RecorderCard({ onAudioReady, disabled }: RecorderCardProps) {
     } catch (startError) {
       cleanup();
       setState("idle");
-      setError(describeMicError(startError));
+      const diagnosis = await collectMicDiagnostics().catch(
+        () => "diagnosis: diagnostics collection failed",
+      );
+      setError(`${describeMicError(startError)} (${diagnosis})`);
     }
   }, [cleanup, onAudioReady]);
 
