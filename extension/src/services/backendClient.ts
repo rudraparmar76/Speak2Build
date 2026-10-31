@@ -19,6 +19,10 @@ const REQUIREMENTS_TIMEOUT_MS = 120_000;
 const CONTEXT_SCAN_TIMEOUT_MS = 30_000;
 /** Relevance scoring is fast; keep default. */
 const RELEVANT_TIMEOUT_MS = 15_000;
+/** Code generation can take a minute or more. */
+const GENERATION_TIMEOUT_MS = 180_000;
+/** Diff apply is fast. */
+const APPLY_DIFF_TIMEOUT_MS = 10_000;
 
 export interface HealthResult {
   ok: boolean;
@@ -46,12 +50,19 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+export interface FileDiff {
+  path: string;
+  language: string;
+  unified_diff: string;
+  is_new_file: boolean;
+}
+
 interface Snippet {
   path: string;
   language?: string;
   content: string;
-  start_line: number;
-  end_line: number;
+  startLine: number;
+  endLine: number;
 }
 
 interface RequirementsApiResponse {
@@ -81,6 +92,27 @@ interface RelevantResponse {
   snippets: Snippet[];
   total_chars: number;
   truncated: boolean;
+}
+
+interface GenerationApiResponse {
+  diffs: FileDiff[];
+  summary: string;
+  model: string;
+  processing_seconds: number;
+  validated: boolean;
+  validation_errors: string[];
+}
+
+interface ApplyDiffResponse {
+  success: boolean;
+  message: string;
+  affected_files: string[];
+}
+
+interface GenerationOptions {
+  include_tests?: boolean;
+  max_files?: number;
+  style_guidance?: string;
 }
 
 export interface AudioUploadResult {
@@ -220,6 +252,40 @@ export class BackendClient {
         }),
       },
       RELEVANT_TIMEOUT_MS,
+    );
+  }
+
+  /** Generate code diffs from requirement + context snippets. */
+  async generateCode(
+    requirementText: string,
+    contextSnippets: Snippet[],
+    options?: GenerationOptions,
+  ): Promise<GenerationApiResponse> {
+    return await this.request<GenerationApiResponse>(
+      "POST",
+      "/api/generate",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requirement_text: requirementText,
+          context_snippets: contextSnippets,
+          options: options || {},
+        }),
+      },
+      GENERATION_TIMEOUT_MS,
+    );
+  }
+
+  /** Apply a unified diff to the workspace. */
+  async applyDiff(unifiedDiff: string, workspaceRoot: string): Promise<ApplyDiffResponse> {
+    return await this.request<ApplyDiffResponse>(
+      "POST",
+      "/api/diff/apply",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unified_diff: unifiedDiff, workspace_root: workspaceRoot }),
+      },
+      APPLY_DIFF_TIMEOUT_MS,
     );
   }
 

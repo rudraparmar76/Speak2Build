@@ -4,7 +4,9 @@ import { RecorderCard, type RecorderState } from "./components/RecorderCard";
 import { getVsCodeApi } from "./bridge";
 import type {
   ClarificationInfo,
+  FileDiff,
   FileNode,
+  GenerationResult,
   HostToWebview,
   RelevantResult,
   RequirementResult,
@@ -76,6 +78,12 @@ export function App() {
   const [scanning, setScanning] = useState(false);
   const [fetchingRelevant, setFetchingRelevant] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
+
+  const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [applyingDiff, setApplyingDiff] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -214,6 +222,28 @@ export function App() {
           );
           break;
         }
+        case "generationResult": {
+          setGenerating(false);
+          setGenerationError(null);
+          setGenerationResult(message.result);
+          pushHistory(
+            `Code generated: ${message.result.diffs.length} file(s) · ${message.result.model} · ${message.result.processingSeconds.toFixed(1)}s` +
+              (message.result.validated ? " ✓ validated" : " ⚠ validation issues") +
+              (message.result.validationErrors.length > 0 ? `: ${message.result.validationErrors.join("; ")}` : ""),
+          );
+          break;
+        }
+        case "diffApplied": {
+          setApplyingDiff(null);
+          setApplyError(null);
+          if (message.success) {
+            pushHistory(`Diff applied: ${message.affectedFiles.join(", ")}`);
+          } else {
+            setApplyError(message.message);
+            pushHistory(`Diff apply failed: ${message.message}`);
+          }
+          break;
+        }
       }
     };
     window.addEventListener("message", handler);
@@ -317,6 +347,31 @@ export function App() {
       filePaths: Array.from(selectedFiles),
     });
   }, [transcript, selectedFiles]);
+
+  const generateCode = useCallback(() => {
+    if (transcript === null || transcript.text.trim().length < 3) return;
+    if (!requirement) return;
+    if (!relevantResult || relevantResult.snippets.length === 0) return;
+    setGenerating(true);
+    setGenerationError(null);
+    vscode.postMessage({
+      type: "generateCode",
+      requirementText: transcript.text,
+      contextSnippets: relevantResult.snippets,
+      options: { include_tests: true },
+    });
+  }, [transcript, requirement, relevantResult]);
+
+  const applyDiff = useCallback((unifiedDiff: string) => {
+    // The host will resolve the workspace root from VS Code workspace folders
+    setApplyingDiff(unifiedDiff);
+    setApplyError(null);
+    vscode.postMessage({
+      type: "applyDiff",
+      unifiedDiff,
+      workspaceRoot: "",
+    });
+  }, []);
 
   const sendPing = useCallback(() => {
     pushHistory(`Sending: "${draft}"`);
@@ -532,6 +587,22 @@ export function App() {
         </section>
       )}
 
+      {/* Scan workspace button — visible when we have a transcript but no scan yet */}
+      {!scanResult && transcript && status === "online" && (
+        <section className="card">
+          <div className="label">Project Context</div>
+          <p className="hint">Scan your workspace to provide code context for code generation.</p>
+          <button
+            className="button"
+            onClick={scanWorkspace}
+            disabled={scanning}
+          >
+            {scanning ? "Scanning…" : "🔍 Scan workspace"}
+          </button>
+          {contextError && <p className="error-text">{contextError}</p>}
+        </section>
+      )}
+
       {scanResult && (
         <section className="card">
           <div className="label">Project Context</div>
@@ -567,6 +638,69 @@ export function App() {
           </div>
 
           {renderSnippets()}
+
+          {requirement && relevantResult && relevantResult.snippets.length > 0 && (
+            <section className="card">
+              <div className="label">Code Generation</div>
+              <p className="hint">
+                Generate code from requirements + {relevantResult.snippets.length} context snippet(s).
+              </p>
+              <button
+                className="button"
+                onClick={generateCode}
+                disabled={status !== "online" || generating}
+              >
+                {generating ? "Generating code…" : "⚡ Generate code"}
+              </button>
+              {generationError && <p className="error-text">{generationError}</p>}
+            </section>
+          )}
+
+          {generationResult && (
+            <section className="card">
+              <div className="label">
+                Generated Diffs ({generationResult.diffs.length})
+              </div>
+              {generationResult.summary && (
+                <p className="hint">{generationResult.summary}</p>
+              )}
+              <p className="hint">
+                {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
+                {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
+              </p>
+              {generationResult.validationErrors.length > 0 && (
+                <div className="validation-errors">
+                  <strong>Validation warnings:</strong>
+                  <ul>
+                    {generationResult.validationErrors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {generationResult.diffs.map((diff: FileDiff, index: number) => (
+                <div key={index} className="diff-card">
+                  <div className="diff-header">
+                    <span className="diff-path">{diff.path}</span>
+                    <span className="hint">({diff.language})</span>
+                    {diff.isNewFile && <span className="badge new-file">New file</span>}
+                  </div>
+                  <pre className="diff-content">{diff.unifiedDiff}</pre>
+                  <button
+                    className="button"
+                    onClick={() => applyDiff(diff.unifiedDiff)}
+                    disabled={status !== "online" || applyingDiff === diff.unifiedDiff}
+                  >
+                    {applyingDiff === diff.unifiedDiff ? "Applying…" : "✓ Apply this diff"}
+                  </button>
+                  {applyError && applyingDiff === diff.unifiedDiff && (
+                    <p className="error-text">{applyError}</p>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
         </section>
       )}
 

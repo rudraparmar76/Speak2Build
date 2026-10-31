@@ -22,7 +22,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 2 | faster-whisper transcription + editable transcript | ✅ Done |
 | 3 | LLM requirement extraction, ambiguity detection, clarifications | ✅ Done |
 | 4 | Project context scanning, relevance scoring, bounded snippets | ✅ Done |
-| 5 | Project-aware code generation + unified diffs | Planned |
+| 5 | Code generation (unified diff patches with validation) | ✅ Done |
 | 6 | Diff review, approve/reject, patch apply, validation | Planned |
 | 7 | Evaluation suite (20 tasks) + metrics + demo | Planned |
 
@@ -123,7 +123,7 @@ npm run build        # esbuild → dist/extension.js + media/webview/*
 npm run typecheck    # tsc --noEmit
 ```
 
-## Current Limitations (Milestone 4)
+## Current Limitations (Milestone 5)
 
 - Requirement extraction is single-shot per call; no requirement history yet.
 - Transcription happens synchronously at request time (CPU); long inputs may
@@ -135,3 +135,6 @@ npm run typecheck    # tsc --noEmit
 - Recordings cap at 120 seconds; no chunked upload for longer sessions yet.
 - The backend has no authentication — it is intentionally loopback-only.
 - Temp recordings accumulate; a store TTL/cleanup sweep is still pending.
+- Code generation validation: TypeScript validation requires `npx tsc` in PATH;
+  Python import validation is heuristic (may miss dynamic imports).
+- Test execution not yet gated in generation pipeline (planned M6).

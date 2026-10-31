@@ -21,7 +21,11 @@ export type WebviewToHost =
   /** Scan workspace for project context. */
   | { type: "scanContext"; workspaceRoot: string }
   /** Request relevant snippets from user-selected files. */
-  | { type: "getRelevantContext"; requirementText: string; filePaths: string[] };
+  | { type: "getRelevantContext"; requirementText: string; filePaths: string[] }
+  /** Generate code diffs from requirement + context. */
+  | { type: "generateCode"; requirementText: string; contextSnippets: Snippet[]; options?: Record<string, unknown> }
+  /** Apply a unified diff to the workspace. */
+  | { type: "applyDiff"; unifiedDiff: string; workspaceRoot: string };
 
 export type ClarificationInfo = {
   question: string;
@@ -70,6 +74,22 @@ export type RelevantResult = {
   truncated: boolean;
 };
 
+export type FileDiff = {
+  path: string;
+  language: string;
+  unifiedDiff: string;
+  isNewFile: boolean;
+};
+
+export type GenerationResult = {
+  diffs: FileDiff[];
+  summary: string;
+  model: string;
+  processingSeconds: number;
+  validated: boolean;
+  validationErrors: string[];
+};
+
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string; transcription?: string }
   | { type: "pingResult"; reply: string }
@@ -80,6 +100,8 @@ export type HostToWebview =
   | { type: "requirements"; requirement: RequirementResult; model: string; processingSeconds: number; repaired: boolean }
   | { type: "contextScan"; result: ScanResult }
   | { type: "contextRelevant"; result: RelevantResult }
+  | { type: "generationResult"; result: GenerationResult }
+  | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

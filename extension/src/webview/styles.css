@@ -361,3 +361,68 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Code Generation ------------------------------------------------------- */
+
+.diff-card {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.diff-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.diff-path {
+  font-weight: 600;
+  font-family: var(--vscode-editor-font-family, monospace);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge.new-file {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.diff-content {
+  margin: 0;
+  padding: 10px;
+  background: var(--vscode-textCodeBlock-background);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.validation-errors {
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--vscode-inputValidation-warningBackground);
+  border-radius: 4px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder);
+  font-size: 11px;
+}
+
+.validation-errors ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}

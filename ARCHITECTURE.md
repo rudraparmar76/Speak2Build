@@ -68,7 +68,16 @@ Pin note: `av<18` — faster-whisper 1.2.1 calls `av.open(..., metadata_errors=.
 
 **Privacy boundary:** only user-approved snippets leave the machine, bounded by line/char limits. Full file contents are never transmitted.
 
-| `extension/src/webview/*` | React UI. Renders state; never calls the backend or VS Code APIs directly — only `postMessage` |
+### Code Generation (M5)
+
+| File | Responsibility |
+|---|---|
+| `backend/app/services/code_generation.py` | LLM prompt → unified diffs → parse → validation (Python AST syntax, import resolution, TypeScript `tsc --noEmit`, dry-run `git apply --check`) → **repair loop** (bounded 2 attempts with validation errors fed back) → `apply_diff` via `git apply` |
+| `backend/app/schemas/generation.py` | `GenerateRequest/Response` (requirement + context snippets → diffs + summary), `FileDiff` (path, language, unified_diff, is_new_file), `ApplyDiffRequest/Response` |
+
+`POST /api/generate` returns validated diffs with metadata. `POST /api/diff/apply` applies a single diff via `git apply`. **Validation pipeline:** syntax check → import resolution → dry-run apply. All must pass before diffs are returned to user.
+
+**Safety boundary:** no auto-apply. User reviews each diff in sidebar, clicks "Apply" per file. `git apply` ensures clean application or rejects with reason.
 
 ### Backend (Python)
 

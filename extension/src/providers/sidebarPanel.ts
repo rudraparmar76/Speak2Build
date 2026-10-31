@@ -184,12 +184,63 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
                 path: s.path,
                 language: s.language,
                 content: s.content,
-                startLine: s.start_line,
-                endLine: s.end_line,
+                startLine: s.startLine,
+                endLine: s.endLine,
               })),
               totalChars: result.total_chars,
               truncated: result.truncated,
             },
+          });
+          break;
+        }
+        case "generateCode": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const result = await client.generateCode(
+            message.requirementText,
+            message.contextSnippets,
+            message.options,
+          );
+          this.post({
+            type: "generationResult",
+            result: {
+              diffs: result.diffs.map((d) => ({
+                path: d.path,
+                language: d.language,
+                unifiedDiff: d.unified_diff,
+                isNewFile: d.is_new_file,
+              })),
+              summary: result.summary,
+              model: result.model,
+              processingSeconds: result.processing_seconds,
+              validated: result.validated,
+              validationErrors: result.validation_errors,
+            },
+          });
+          break;
+        }
+        case "applyDiff": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          const result = await client.applyDiff(message.unifiedDiff, workspaceRoot);
+          this.post({
+            type: "diffApplied",
+            success: result.success,
+            message: result.message,
+            affectedFiles: result.affected_files,
           });
           break;
         }

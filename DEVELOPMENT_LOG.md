@@ -1,5 +1,49 @@
 # Speak2Build — Development Log
 
+## Milestone 5 — Code Generation ✅
+
+**Goal:** generate valid, project-aware unified diff patches from structured requirements + context snippets, with automated validation and repair loop.
+
+### Completed
+
+- [x] `services/code_generation.py`: prompt contract → LLM → unified diff JSON → parse → validation (Python AST syntax check, import resolution, TypeScript `tsc --noEmit`, dry-run `git apply --check`) → **repair loop** (bounded 2 attempts, validation errors fed back to LLM) → `apply_diff` via `git apply`.
+- [x] `schemas/generation.py`: `GenerateRequest/Response` (requirement + context → diffs + summary), `FileDiff` (path, language, unified_diff, is_new_file), `ApplyDiffRequest/Response`.
+- [x] `POST /api/generate` — returns validated diffs with metadata (model, processing_seconds, validated flag, validation_errors).
+- [x] `POST /api/diff/apply` — applies a single unified diff via `git apply`, returns success + affected files.
+- [x] Sidebar flow: **⚡ Generate code** button (enabled after requirement + context) → diff preview cards (path, language, syntax-highlighted unified diff, new-file badge) → **✓ Apply this diff** per file → success/failure feedback.
+- [x] Validation pipeline: Python AST syntax check → import resolution (relative + local package heuristics) → TypeScript `tsc --noEmit` (if available) → dry-run `git apply --check`. All must pass.
+- [x] Repair loop: on any validation failure, the LLM receives the exact error messages and retries (max 2 attempts).
+- [x] 7 new tests (59 total green): valid diffs first try, syntax error repair, two-failure terminal error, Python syntax validation, diff apply check, actual git apply, config detection.
+- [x] Live verification: generated email validator + tests from requirement, both diffs passed validation on first attempt.
+
+### Technical Decisions
+
+1. **Unified diff output** — standard format; works with `git apply`, `patch`, VS Code diff editor; line-precise.
+2. **Per-file validation before user sees** — catch syntax/import errors in the repair loop, not in the UI.
+3. **Repair loop with actual error messages** — validation errors (exact line/column from AST/tsc/git) fed back to LLM; retry #1 usually succeeds.
+4. **Dry-run `git apply --check`** — ensures diff applies cleanly to current workspace state.
+5. **No auto-apply** — user must explicitly click "Apply" per diff; safety first.
+6. **Heuristic import validation** — checks relative imports resolve to existing files, local packages have `__init__.py`. No false positives for stdlib.
+
+### Bugs & Fixes
+
+- **Unified diff format for `git apply`** — requires trailing newline, correct hunk headers (`@@ -0,0 +1,N @@`), and `/dev/null` for new files. Fixed test fixtures and documented the exact format in comments.
+- **In-memory diff application for validation** — wrote a minimal unified diff parser (`_apply_diff_in_memory`) to compute new content for syntax checking without shelling out.
+- **TypeScript validation optional** — `npx tsc` may not be in PATH; validation gracefully degrades with a warning rather than failing.
+
+### Verification Performed
+
+- `pytest`: **59 passed**. `npm run build` + `tsc --noEmit`: clean.
+- **Live generation**: requirement "Create a function that validates email format and prevents duplicate registrations using SQLite" + 2 context snippets → 2 diffs (email_validator.py + test_email_validator.py) → both passed validation on first attempt → `git apply --check` clean.
+- Backend left running (pid 10656).
+
+### Next Steps
+
+1. Milestone 6 — Review/Validation: diff preview, approve/reject, patch apply, validation.
+2. Milestone 7 — Evaluation & Polish: 20-task suite, metrics, demo.
+
+---
+
 ## Milestone 4 — Project Context ✅
 
 **Goal:** give the LLM bounded, user-consented access to the workspace — language detection, file tree, and heuristic relevance scoring — without ever sending unapproved file contents.

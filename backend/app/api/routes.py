@@ -19,6 +19,13 @@ from app.schemas.context import (
     ScanRequest,
     ScanResponse,
 )
+from app.schemas.generation import (
+    ApplyDiffRequest,
+    ApplyDiffResponse,
+    FileDiff,
+    GenerateRequest,
+    GenerateResponse,
+)
 from app.schemas.requirements import ExtractRequest, ExtractionResponse
 from app.schemas.transcription import (
     TranscribeRequest,
@@ -30,6 +37,7 @@ from app.services import recorder as audio_recorder
 from app.services import requirements as requirements_service
 from app.services import transcription as transcription_service
 from app.services import project_context as context_service
+from app.services import code_generation as generation_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -246,3 +254,64 @@ def get_relevant_context(payload: RelevantRequest) -> RelevantResponse:
         total_chars=total_chars,
         truncated=truncated,
     )
+
+
+@router.post("/api/generate", response_model=GenerateResponse)
+def generate_code(payload: GenerateRequest) -> GenerateResponse:
+    """Generate code diffs from requirement + context snippets."""
+    if not generation_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="No LLM configured. Set SPEAK2BUILD_LLM_MODEL and restart backend.",
+        )
+
+    # Determine workspace root from context snippets or use CWD
+    workspace_root = Path.cwd()
+    if payload.context_snippets:
+        # Try to find common workspace root from snippet paths
+        first_path = payload.context_snippets[0].get("path", "")
+        if first_path:
+            # Heuristic: workspace is parent of first few path components
+            parts = Path(first_path).parts
+            if len(parts) >= 2:
+                workspace_root = Path(*parts[:2]).resolve()
+
+    try:
+        outcome = generation_service.generate_code(
+            requirement_text=payload.requirement_text,
+            context_snippets=payload.context_snippets,
+            options=payload.options,
+            workspace_root=str(workspace_root),
+        )
+    except LLMUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}") from exc
+    except generation_service.CodeGenerationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {exc}") from exc
+
+    return GenerateResponse(
+        diffs=outcome.diffs,
+        summary=outcome.summary,
+        model=outcome.model,
+        processing_seconds=outcome.processing_seconds,
+        validated=outcome.validated,
+        validation_errors=outcome.validation_errors,
+    )
+
+
+@router.post("/api/diff/apply", response_model=ApplyDiffResponse)
+def apply_diff(payload: ApplyDiffRequest) -> ApplyDiffResponse:
+    """Apply a unified diff to the workspace."""
+    try:
+        workspace_root = Path(payload.workspace_root).resolve()
+        if not workspace_root.exists():
+            raise HTTPException(status_code=400, detail="Workspace root does not exist")
+        success, message, affected = generation_service.apply_diff(payload.unified_diff, workspace_root)
+        return ApplyDiffResponse(success=success, message=message, affected_files=affected)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Apply failed: {exc}") from exc
