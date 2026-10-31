@@ -19,7 +19,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 |:---:|---|:---:|
 | 0 | Extension ↔ React sidebar ↔ FastAPI backend connection | ✅ Done |
 | 1 | Voice recording + audio upload | ✅ Done |
-| 2 | faster-whisper transcription + editable transcript | Planned |
+| 2 | faster-whisper transcription + editable transcript | ✅ Done |
 | 3 | LLM requirement extraction, ambiguity detection, clarifications | Planned |
 | 4 | Project context inspection (safe, bounded) | Planned |
 | 5 | Project-aware code generation + unified diffs | Planned |
@@ -32,7 +32,7 @@ See `DEVELOPMENT_LOG.md` for details and `ARCHITECTURE.md` for design.
 
 - **Extension:** TypeScript, React 18, VS Code Webview API, esbuild
 - **Backend:** Python 3.12+, FastAPI, Pydantic v2, uvicorn
-- **Speech:** faster-whisper (from Milestone 2)
+- **Speech:** faster-whisper (local STT, model configurable via env)
 - **LLM:** provider configured via environment variables (from Milestone 3; no keys ever hardcoded)
 
 ## Prerequisites
@@ -53,6 +53,18 @@ python -m venv .venv
 ```
 
 The backend listens on `http://127.0.0.1:8000` (loopback only).
+
+On first health check it warm-loads the Whisper model in a background thread;
+the very first load downloads the model into `%USERPROFILE%\.cache\huggingface`.
+The sidebar's status chip shows the STT state (`idle → loading → ready`).
+
+Speech model configuration (environment variables):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SPEAK2BUILD_WHISPER_MODEL` | `small` | Model size (`base`, `small`, `medium`…) |
+| `SPEAK2BUILD_WHISPER_DEVICE` | `cpu` | `cpu` (or `cuda` if you have NVIDIA + CUDA) |
+| `SPEAK2BUILD_WHISPER_COMPUTE_TYPE` | `int8` | Quantization for CPU speed/memory |
 
 ### 2. Extension
 
@@ -105,14 +117,16 @@ npm run build        # esbuild → dist/extension.js + media/webview/*
 npm run typecheck    # tsc --noEmit
 ```
 
-## Current Limitations (Milestone 1)
+## Current Limitations (Milestone 2)
 
-- Recordings are stored by the backend but not yet transcribed (faster-whisper
-  arrives in Milestone 2); the sidebar currently shows upload metadata only.
-- Recording requires the Windows "Let desktop apps access your microphone"
-  toggle (the backend records the mic, not the webview — the webview layer
-  categorically denies mic access in current VS Code builds).
+- Recording + transcription only — no requirement extraction or code
+  generation yet (Milestone 3+).
+- Transcription happens synchronously at request time (CPU); long inputs may
+  take roughly real-time to slightly faster. A queue/job API is deferred until
+  M7 measurements say it's needed.
+- Voice Activity Detection trimming disabled for MVP (adds an Ort API surface
+  faster-whisper versions can move under us); consecutive-speech dictation works fine without it.
 - One active recording session at a time (single global mic session).
 - Recordings cap at 120 seconds; no chunked upload for longer sessions yet.
 - The backend has no authentication — it is intentionally loopback-only.
-- Temp recordings accumulate; a store TTL/cleanup sweep comes with M2.
+- Temp recordings accumulate; a store TTL/cleanup sweep is still pending.

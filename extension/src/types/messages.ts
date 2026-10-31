@@ -13,14 +13,17 @@ export type WebviewToHost =
   /** Start a microphone session owned by the local backend process. */
   | { type: "startRecording" }
   | { type: "stopRecording" }
-  | { type: "cancelRecording" };
+  | { type: "cancelRecording" }
+  /** Transcribe a stored recording by id. */
+  | { type: "transcribe"; audioId: string };
 
 export type HostToWebview =
-  | { type: "health"; ok: boolean; version?: string; error?: string }
+  | { type: "health"; ok: boolean; version?: string; error?: string; transcription?: string }
   | { type: "pingResult"; reply: string }
   | { type: "recordingStarted"; sampleRate: number; channels: number }
   | { type: "recordingCancelled" }
   | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
+  | { type: "transcription"; audioId: string; language?: string; text: string; segments: Array<{ start: number; end: number; text: string }>; durationSeconds: number; processingSeconds: number }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

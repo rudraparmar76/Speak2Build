@@ -24,6 +24,21 @@ interface UploadInfo {
   sizeBytes: number;
 }
 
+interface TranscriptInfo {
+  audioId: string;
+  language?: string;
+  text: string;
+  segments: Array<{ start: number; end: number; text: string }>;
+  durationSeconds: number;
+  processingSeconds: number;
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export function App() {
   const [status, setStatus] = useState<BackendStatus>("connecting");
   const [statusDetail, setStatusDetail] = useState("Contacting backend…");
@@ -34,6 +49,8 @@ export function App() {
   const [recorderError, setRecorderError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastUpload, setLastUpload] = useState<UploadInfo | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptInfo | null>(null);
+  const [transcribingId, setTranscribingId] = useState<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -55,7 +72,10 @@ export function App() {
         case "health": {
           if (message.ok) {
             setStatus("online");
-            setStatusDetail(`Backend online (v${message.version ?? "?"})`);
+            setStatusDetail(
+              `Backend online (v${message.version ?? "?"})` +
+                (message.transcription ? ` · STT: ${message.transcription}` : ""),
+            );
           } else {
             setStatus("offline");
             setStatusDetail(message.error ?? "Backend is not reachable.");
@@ -84,9 +104,30 @@ export function App() {
             channels: message.channels,
             sizeBytes: message.sizeBytes,
           });
+          // A fresh recording invalidates any previous transcript.
+          setTranscript((current) =>
+            current && current.audioId === message.audioId ? current : null,
+          );
           pushHistory(
             `Recording stored: ${message.durationSeconds.toFixed(1)}s @ ${message.sampleRate} Hz, ` +
               `${(message.sizeBytes / 1024).toFixed(0)} KB (id ${message.audioId.slice(0, 8)}…)`,
+          );
+          break;
+        }
+        case "transcription": {
+          setTranscribingId(null);
+          setTranscript({
+            audioId: message.audioId,
+            language: message.language,
+            text: message.text,
+            segments: message.segments,
+            durationSeconds: message.durationSeconds,
+            processingSeconds: message.processingSeconds,
+          });
+          const preview = message.text.length > 80 ? `${message.text.slice(0, 80)}…` : message.text;
+          pushHistory(
+            `Transcribed in ${message.processingSeconds.toFixed(1)}s` +
+              (message.language ? ` [${message.language}]` : "") + `: "${preview}"`,
           );
           break;
         }
@@ -96,14 +137,10 @@ export function App() {
           break;
         }
         case "hostError": {
-          // If a recorder operation was in flight, return the card to idle
-          // and show the reason at the point of interaction.
-          setRecorderState((current) => {
-            if (current !== "idle") {
-              return "idle";
-            }
-            return current;
-          });
+          // If a recorder or transcription operation was in flight, return
+          // the affected flow to idle and show the reason where it happened.
+          setRecorderState((current) => (current !== "idle" ? "idle" : current));
+          setTranscribingId(null);
           setRecorderError((prevRecorderError) => message.message);
           pushHistory(`Error: ${message.message}`);
           break;
@@ -148,6 +185,11 @@ export function App() {
     vscode.postMessage({ type: "cancelRecording" });
   }, []);
 
+  const startTranscription = useCallback((audioId: string) => {
+    setTranscribingId(audioId);
+    vscode.postMessage({ type: "transcribe", audioId });
+  }, []);
+
   const sendPing = useCallback(() => {
     pushHistory(`Sending: "${draft}"`);
     vscode.postMessage({ type: "ping", message: draft });
@@ -184,7 +226,51 @@ export function App() {
             {" · "}{lastUpload.channels} channel{lastUpload.channels === 1 ? "" : "s"}
             {" · "}{(lastUpload.sizeBytes / 1024).toFixed(0)} KB
           </p>
-          <p className="hint">From Milestone 2, this recording will be transcribed by faster-whisper.</p>
+          <button
+            className="button"
+            onClick={() => startTranscription(lastUpload.audioId)}
+            disabled={status !== "online" || transcribingId !== null}
+          >
+            {transcribingId === lastUpload.audioId
+              ? "Transcribing… (first call may warm the model)"
+              : "▶ Transcribe"}
+          </button>
+        </section>
+      )}
+
+      {transcript && (
+        <section className="card">
+          <div className="label">Transcript (editable)</div>
+          {transcript.language && (
+            <p className="hint">Detected language: {transcript.language}</p>
+          )}
+          <textarea
+            className="textarea"
+            rows={Math.min(10, Math.max(3, Math.ceil(transcript.text.length / 60) + 1))}
+            value={transcript.text}
+            onChange={(event) =>
+              setTranscript((current) =>
+                current === null ? current : { ...current, text: event.target.value },
+              )
+            }
+            placeholder="Transcription will appear here…"
+          />
+          {transcript.segments.length > 1 && (
+            <ul className="segments">
+              {transcript.segments.map((segment, index) => (
+                <li key={index}>
+                  <span className="entry-time">
+                    {formatTime(segment.start)}–{formatTime(segment.end)}
+                  </span>{" "}
+                  {segment.text}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="hint">
+            {transcript.durationSeconds.toFixed(1)}s of audio processed in {transcript.processingSeconds.toFixed(1)}s.
+            Fix any misrecognized terms above — your edits feed the next milestone.
+          </p>
         </section>
       )}
 

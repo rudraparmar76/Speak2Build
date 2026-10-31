@@ -11,8 +11,14 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
 from app.schemas.common import HealthResponse, PingRequest, PingResponse
+from app.schemas.transcription import (
+    TranscribeRequest,
+    TranscriptionResponse,
+    TranscriptSegment,
+)
 from app.services import audio_store
 from app.services import recorder as audio_recorder
+from app.services import transcription as transcription_service
 
 router = APIRouter()
 
@@ -23,8 +29,17 @@ MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB ≈ 10 minutes of 16 kHz mono W
 
 @router.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Simple liveness probe used by the extension on webview startup."""
-    return HealthResponse(status="ok", version=API_VERSION)
+    """Liveness probe. Also kicks off model warm-up (idempotent).
+
+    The `transcription` field reports the STT model state machine so the
+    sidebar and operators can tell 'ready' apart from 'still loading'.
+    """
+    transcription_service.request_warmup()
+    return HealthResponse(
+        status="ok",
+        version=API_VERSION,
+        transcription=transcription_service.state(),
+    )
 
 
 @router.post("/api/ping", response_model=PingResponse)
@@ -107,3 +122,37 @@ def cancel_recording() -> None:
         # Nothing to cancel is already a fine outcome for a cancel request.
         return None
     return None
+
+
+@router.post("/api/transcribe", response_model=TranscriptionResponse)
+def transcribe(payload: TranscribeRequest) -> TranscriptionResponse:
+    """Transcribe a previously stored recording by id.
+
+    The pattern-checked audio_id resolves through audio_store.path_for, so
+    path traversal is impossible. A missing file (temp cleanup, reboot)
+    surfaces as 404 with a recoverable hint rather than a 500.
+    """
+    path = audio_store.path_for(payload.audio_id)
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Recording {payload.audio_id[:8]}… not found — it may have been cleaned up. Record again.",
+        )
+
+    transcription_service.request_warmup()
+    try:
+        result = transcription_service.transcribe(path)
+    except transcription_service.TranscriptionUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read audio: {exc}") from exc
+
+    text = " ".join(segment.text for segment in result.segments)
+    return TranscriptionResponse(
+        audio_id=payload.audio_id,
+        language=result.language,
+        duration_seconds=result.duration_seconds,
+        processing_seconds=result.processing_seconds,
+        text=text,
+        segments=[TranscriptSegment(**seg.__dict__) for seg in result.segments],
+    )

@@ -8,11 +8,27 @@
 const REQUEST_TIMEOUT_MS = 5000;
 /** Stop calls can elapse while audio drains, so allow a longer window. */
 const RECORDING_STOP_TIMEOUT_MS = 15000;
+/**
+ * First transcription can contend with model warm-up (or a one-time model
+ * download), so allow minutes rather than seconds.
+ */
+const TRANSCRIBE_TIMEOUT_MS = 180_000;
 
 export interface HealthResult {
   ok: boolean;
   version?: string;
   error?: string;
+  /** Whisper model state: idle | loading | ready | error. */
+  transcription?: string;
+}
+
+interface TranscriptionResponse {
+  audio_id: string;
+  language?: string;
+  duration_seconds: number;
+  processing_seconds: number;
+  text: string;
+  segments: Array<{ start: number; end: number; text: string }>;
 }
 
 export interface AudioUploadResult {
@@ -39,11 +55,15 @@ export class BackendClient {
   /** Liveness check. Never throws: failures are reported as ok=false. */
   async health(): Promise<HealthResult> {
     try {
-      const data = await this.request<{ status: string; version: string }>(
+      const data = await this.request<{ status: string; version: string; transcription: string }>(
         "GET",
         "/api/health",
       );
-      return { ok: data.status === "ok", version: data.version };
+      return {
+        ok: data.status === "ok",
+        version: data.version,
+        transcription: data.transcription,
+      };
     } catch (error) {
       return { ok: false, error: describeError(error, this.baseUrl) };
     }
@@ -79,6 +99,19 @@ export class BackendClient {
   /** Discard the active session; 204 No Content on success. */
   async cancelRecording(): Promise<void> {
     await this.request<void>("DELETE", "/api/recording");
+  }
+
+  /** Transcribe a stored recording by id. Throws; caller surfaces errors. */
+  async transcribe(audioId: string): Promise<TranscriptionResponse> {
+    return await this.request<TranscriptionResponse>(
+      "POST",
+      "/api/transcribe",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_id: audioId }),
+      },
+      TRANSCRIBE_TIMEOUT_MS,
+    );
   }
 
   private async request<T>(

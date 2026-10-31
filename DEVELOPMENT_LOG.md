@@ -1,5 +1,60 @@
 # Speak2Build — Development Log
 
+## Milestone 2 — Speech Recognition ✅
+
+**Goal:** turn stored recordings into accurate, editable transcripts — locally with faster-whisper.
+
+### Completed
+
+- [x] `services/transcription.py`: faster-whisper service with env-configurable model (`SPEAK2BUILD_WHISPER_MODEL`/`_DEVICE`/`_COMPUTE_TYPE`; defaults `small`/`cpu`/`int8`).
+- [x] Background warm-up on first `/api/health` probe (idempotent, one-time model download to the HF cache); state machine `idle → loading → ready | error` reported through health responses and the sidebar chip (`STT: …`).
+- [x] `POST /api/transcribe` by `audio_id` reference; regex-validated id, 404 for expired recordings, 503 while model loads/errors.
+- [x] Timestamped `segments` + combined `text` returned; Pydantic schema `TranscriptionResponse`.
+- [x] Sidebar: **Transcribe** button on the last recording, editable transcript textarea (user corrections are the M3 input), language display, segment timestamps, processing-time readout.
+- [x] Tests: conftest autouse disables model warm-up in test runs; fake-service tests cover routing/validation/state (21 total green).
+- [x] Real end-to-end verification with actual speech (see below).
+
+### Files Changed
+
+- NEW: `backend/app/services/transcription.py`, `backend/app/schemas/transcription.py`, `backend/tests/conftest.py`, `backend/tests/test_transcription.py`
+- MODIFIED: `backend/app/api/routes.py`, `backend/app/schemas/common.py` (health + transcription state), `backend/requirements.txt` (+`faster-whisper`, +`av<18`), extension messages/client/panel/App/styles, docs.
+
+### Technical Decisions
+
+1. **Warm-load on first health probe** rather than lazy-load on transcribe: the sidebar checks health on open, so the model starts loading immediately and users see progress (`STT: loading → ready`); avoided "first request takes minutes".
+2. **Transcribe by reference (`audio_id`), not bytes** — file already stored; same regex/id machinery blocks traversal.
+3. **Whisper returned shapes kept close to upstream** (segments with start/end) — M3/M7 need segment-level traceability (requirement ↔ words spoken).
+4. **VAD filter off for MVP** — silero-VAD adds an Ort/PyAV-version surface beyond our needs; MVP dictations are single utterances.
+5. **3-minute client timeout** on transcribe: first call may contend with model load/download.
+
+### Bugs & Fixes
+
+- **PyAv API break** (the big one): faster-whisper 1.2.1 calls `av.open(..., metadata_errors="ignore")`; av 18/19 removed it → 500 with `TypeError` on every transcription. Diagnosed via the uvicorn traceback, mapped the compatibility windows, empirically found `av 17.1.0` correct (introspection impossible — C extension exposes no signature; behavior test was the honest probe). Pinned `av<18` with the reason documented in `requirements.txt`.
+- **Module/function mismatch**: routes called `transcription_service.transcribe/state` as *module functions*, but I'd only defined class methods. Added delegating module functions (`request_warmup`, `state`, `transcribe`) — this keeps a single patch point for tests and avoids leaking the singleton into routes.
+- **PowerShell UTF-16 script write** garbled a probe helper; rewrote as ASCII/UTF-8 file. (Probe-side only; no product impact.)
+
+### Verification Performed
+
+- `pytest`: **21 passed** (5 transcription tests: happy path, multi-segment join, 404, 422 pattern-validation, 503-not-ready).
+- `npm run build` / `tsc --noEmit`: clean.
+- **Real speech end-to-end**: Windows SAPI TTS rendered "Create a function that validates the user email and prevents duplicate registrations." into a 16 kHz WAV; uploaded (`201`, 5.47 s audio); model state polled `loading → ready`; transcribe → `200` in **4.1 s** with **word-perfect text**, `language: "en"`, one segment. Backend left running with the updated code.
+- Not executed by me: your mic-spoken transcription (your validation step).
+
+### Current Limitations
+
+- Synchronous CPU transcription; a job/queue API deferred until M7 measurements justify it.
+- No whisper/VAD tuning; no domain vocabulary hints yet (possible M7 improvement: `initial_prompt` with code identifiers).
+- Temp recordings are never cleaned up (TTL sweep pending).
+
+### Next Steps (Milestone 3 — Requirement Intelligence)
+
+1. LLM provider abstraction behind env config (no hardcoded keys; provider-agnostic call shim).
+2. Structured requirement schema (Pydantic): task, language, inputs, outputs, constraints, acceptance criteria.
+3. LLM → structured extraction from the (edited) transcript; validation + repair loop for malformed model output.
+4. Ambiguity detection + clarification questions; sidebar Q&A round-trip.
+
+---
+
 ## Milestone 1 — Voice Recording ✅ (revised architecture)
 
 **Goal:** capture the developer's voice and deliver it to the backend as whisper-ready mono PCM WAV.

@@ -15,7 +15,11 @@ client = TestClient(app)
 def test_health_returns_ok_and_version():
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.1.0"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["version"] == "0.1.0"
+    # Warm-up is disabled in tests (conftest), so the model stays idle.
+    assert body["transcription"] == "idle"
 
 
 def test_ping_echoes_message():

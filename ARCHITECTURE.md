@@ -35,6 +35,15 @@
 | `extension/src/providers/sidebarPanel.ts` | Webview lifecycle; generates HTML with CSP + per-render nonce; routes `WebviewToHost` messages to services; posts `HostToWebview` results back |
 | `extension/src/services/backendClient.ts` | All backend HTTP access; 5s timeout via `AbortController`; maps connection/HTTP/timeout errors to human-readable strings |
 | `extension/src/types/messages.ts` | The webview↔host message contract: typed unions `WebviewToHost` and `HostToWebview` (single source of truth) |
+
+### Speech Recognition (backend, python)
+
+| File | Responsibility |
+|---|---|
+| `backend/app/services/transcription.py` | faster-whisper service: env-configured model (`SPEAK2BUILD_WHISPER_MODEL`, default `small`, device `cpu`, compute `int8`), background warm-up on first health probe, state machine `idle/loading/ready/error` surfaced via `/api/health`, `transcribe(path)` returning language + segments |
+| `backend/app/schemas/transcription.py` | `TranscribeRequest` (regex-validated audio_id), `TranscriptSegment`, `TranscriptionResponse` |
+
+Pin note: `av<18` — faster-whisper 1.2.1 calls `av.open(..., metadata_errors=...)`, removed in av 18+.
 | `extension/src/webview/*` | React UI. Renders state; never calls the backend or VS Code APIs directly — only `postMessage` |
 
 ### Backend (Python)
@@ -65,6 +74,12 @@ Response `200`: `{ "status": "ok", "version": "0.1.0" }`
 ### `POST /api/ping`
 Request: `{ "message": string (1–2000 chars) }` → `422` if invalid.
 Response `200`: `{ "echo": string, "received_chars": int, "timestamp": float }`
+
+### `POST /api/transcribe`
+Request: `{ "audio_id": "<32-char hex>" }` (regex-validated; the reference never carries audio bytes).
+Response `200`: `{ audio_id, language, duration_seconds, processing_seconds, text, segments: [{start, end, text}] }`
+Errors: `422` malformed id; `404` recording missing (expired temp file); `503` model not ready (state included in detail).
+First-call behavior: the endpoint idempotently triggers warm-up, expecting `503` on a *very* first call if you race it; the sidebar's health chip shows `STT: ready` when safe to use.
 
 ### `POST /api/recording/start`
 No body. Opens the backend's microphone and starts an in-memory session.

@@ -13,6 +13,7 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     version: str
+    transcription: str = "idle"
 
 
 class PingRequest(BaseModel):
