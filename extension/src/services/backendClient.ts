@@ -13,6 +13,8 @@ const RECORDING_STOP_TIMEOUT_MS = 15000;
  * download), so allow minutes rather than seconds.
  */
 const TRANSCRIBE_TIMEOUT_MS = 180_000;
+/** LLM extraction round-trips can be slow; allow two minutes. */
+const REQUIREMENTS_TIMEOUT_MS = 120_000;
 
 export interface HealthResult {
   ok: boolean;
@@ -29,6 +31,21 @@ interface TranscriptionResponse {
   processing_seconds: number;
   text: string;
   segments: Array<{ start: number; end: number; text: string }>;
+}
+
+interface RequirementsApiResponse {
+  requirement: {
+    task: string;
+    language: string;
+    inputs: string[];
+    outputs: string[];
+    constraints: string[];
+    acceptance_criteria: string[];
+    clarifications: Array<{ question: string; reason?: string | null; answer?: string | null }>;
+  };
+  model: string;
+  processing_seconds: number;
+  repaired: boolean;
 }
 
 export interface AudioUploadResult {
@@ -111,6 +128,29 @@ export class BackendClient {
         body: JSON.stringify({ audio_id: audioId }),
       },
       TRANSCRIBE_TIMEOUT_MS,
+    );
+  }
+
+  /**
+   * Extract structured requirements from the edited transcript.
+   * Optional `answers` re-runs extraction after clarification rounds.
+   */
+  async extractRequirements(
+    transcript: string,
+    answers?: Record<string, string>,
+  ): Promise<RequirementsApiResponse> {
+    const body: Record<string, unknown> = { transcript };
+    if (answers && Object.keys(answers).length > 0) {
+      body.answers = answers;
+    }
+    return await this.request<RequirementsApiResponse>(
+      "POST",
+      "/api/requirements",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      REQUIREMENTS_TIMEOUT_MS,
     );
   }
 

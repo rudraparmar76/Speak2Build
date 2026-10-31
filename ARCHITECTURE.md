@@ -44,6 +44,18 @@
 | `backend/app/schemas/transcription.py` | `TranscribeRequest` (regex-validated audio_id), `TranscriptSegment`, `TranscriptionResponse` |
 
 Pin note: `av<18` — faster-whisper 1.2.1 calls `av.open(..., metadata_errors=...)`, removed in av 18+.
+
+### Requirement Intelligence (M3)
+
+| File | Responsibility |
+|---|---|
+| `backend/app/services/llm_client.py` | OpenAI-compatible chat-completions client; config only from env (`SPEAK2BUILD_LLM_*`); typed errors for unreachable vs provider-rejected; `httpx.MockTransport` test seam |
+| `backend/app/services/requirements.py` | Prompt contract → LLM → JSON parse → Pydantic validate → **repair loop** (validation errors fed back, bounded at 2 attempts) → answer reconciliation |
+| `backend/app/schemas/requirements.py` | `RequirementModel` (task/inputs/outputs/constraints/acceptance_criteria/clarifications), `ExtractRequest` (transcript ≤ 8 000 chars + answers), `ExtractionResponse` |
+
+`POST /api/requirements` error taxonomy: `503` unconfigured/unreachable provider, `502` provider rejected the request, `422` model output could not be repaired into schema-valid JSON. Ambiguity is *not* an error — it is `clarifications` inside a `200`.
+
+**Transcript-only data boundary:** only the (edited) transcript text leaves the machine, bounded to 8 000 chars; project files are never sent here — the (also bounded, separately consented) context job belongs to M4.
 | `extension/src/webview/*` | React UI. Renders state; never calls the backend or VS Code APIs directly — only `postMessage` |
 
 ### Backend (Python)

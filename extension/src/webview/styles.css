@@ -221,3 +221,41 @@ body {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
 }
+
+.requirement-task {
+  margin: 6px 0 2px;
+  font-weight: 600;
+}
+
+.sub-label {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.bullets {
+  margin: 2px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clarification {
+  margin: 6px 0 10px;
+}
+
+.clarification-question {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.error-text {
+  color: var(--vscode-errorForeground);
+  font-size: 12px;
+  margin: 6px 0 0;
+}

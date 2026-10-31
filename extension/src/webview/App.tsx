@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { RecorderCard, type RecorderState } from "./components/RecorderCard";
 import { getVsCodeApi } from "./bridge";
-import type { HostToWebview } from "../types/messages";
+import type {
+  ClarificationInfo,
+  HostToWebview,
+  RequirementResult,
+} from "../types/messages";
 
 const vscode = getVsCodeApi();
 
@@ -51,6 +55,16 @@ export function App() {
   const [lastUpload, setLastUpload] = useState<UploadInfo | null>(null);
   const [transcript, setTranscript] = useState<TranscriptInfo | null>(null);
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
+
+  const [requirement, setRequirement] = useState<RequirementResult | null>(null);
+  const [requirementMeta, setRequirementMeta] = useState<{
+    model: string;
+    processingSeconds: number;
+    repaired: boolean;
+  } | null>(null);
+  const [extractAnswers, setExtractAnswers] = useState<Record<string, string>>({});
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -136,11 +150,33 @@ export function App() {
           pushHistory("Recording cancelled — nothing stored.");
           break;
         }
+        case "requirements": {
+          setExtracting(false);
+          setExtractError(null);
+          setRequirement(message.requirement);
+          setRequirementMeta({
+            model: message.model,
+            processingSeconds: message.processingSeconds,
+            repaired: message.repaired,
+          });
+          const asked = message.requirement.clarifications.filter(
+            (item) => !item.answer,
+          ).length;
+          pushHistory(
+            `Requirements extracted (${message.model}` +
+              (message.repaired ? ", repaired" : "") + `) in ` +
+              `${message.processingSeconds.toFixed(1)}s · ` +
+              (asked > 0 ? `${asked} clarification question(s)` : "no open questions"),
+          );
+          break;
+        }
         case "hostError": {
           // If a recorder or transcription operation was in flight, return
           // the affected flow to idle and show the reason where it happened.
           setRecorderState((current) => (current !== "idle" ? "idle" : current));
           setTranscribingId(null);
+          setExtracting(false);
+          setExtractError(message.message);
           setRecorderError((prevRecorderError) => message.message);
           pushHistory(`Error: ${message.message}`);
           break;
@@ -188,6 +224,26 @@ export function App() {
   const startTranscription = useCallback((audioId: string) => {
     setTranscribingId(audioId);
     vscode.postMessage({ type: "transcribe", audioId });
+  }, []);
+
+  const extractRequirements = useCallback(
+    (answers?: Record<string, string>) => {
+      if (transcript === null || transcript.text.trim().length < 3) {
+        return;
+      }
+      setExtracting(true);
+      setExtractError(null);
+      vscode.postMessage({
+        type: "extractRequirements",
+        transcript: transcript.text,
+        ...(answers && Object.keys(answers).length > 0 ? { answers } : {}),
+      });
+    },
+    [transcript],
+  );
+
+  const updateAnswer = useCallback((question: string, value: string) => {
+    setExtractAnswers((current) => ({ ...current, [question]: value }));
   }, []);
 
   const sendPing = useCallback(() => {
@@ -271,6 +327,84 @@ export function App() {
             {transcript.durationSeconds.toFixed(1)}s of audio processed in {transcript.processingSeconds.toFixed(1)}s.
             Fix any misrecognized terms above — your edits feed the next milestone.
           </p>
+          <button
+            className="button"
+            onClick={() => extractRequirements()}
+            disabled={status !== "online" || extracting || transcript.text.trim().length < 3}
+          >
+            {extracting ? "Extracting requirements…" : "⚙ Extract requirements"}
+          </button>
+          {extractError && <p className="error-text">{extractError}</p>}
+        </section>
+      )}
+
+      {requirement && (
+        <section className="card">
+          <div className="label">Requirements</div>
+          {requirementMeta && (
+            <p className="hint">
+              {requirementMeta.model}
+              {requirementMeta.repaired ? " · schema-repaired" : ""} ·{" "}
+              {requirementMeta.processingSeconds.toFixed(1)}s
+            </p>
+          )}
+          <p className="requirement-task">{requirement.task}</p>
+
+          {(
+            [
+              ["Inputs", requirement.inputs],
+              ["Outputs", requirement.outputs],
+              ["Constraints", requirement.constraints],
+              ["Acceptance criteria", requirement.acceptanceCriteria],
+            ] as Array<[string, string[]]>
+          ).map(
+            ([title, items]) =>
+              items.length > 0 && (
+                <div key={title}>
+                  <div className="sub-label">{title}</div>
+                  <ul className="bullets">
+                    {items.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+          )}
+
+          {requirement.clarifications.length > 0 && (
+            <div>
+              <div className="sub-label">
+                Clarifications ({requirement.clarifications.length})
+              </div>
+              {requirement.clarifications.map((item: ClarificationInfo, index) => (
+                <div key={index} className="clarification">
+                  <p className="clarification-question">
+                    {item.question}
+                    {item.reason && <span className="hint"> — {item.reason}</span>}
+                  </p>
+                  <input
+                    className="input"
+                    value={
+                      extractAnswers[item.question] ?? item.answer ?? ""
+                    }
+                    onChange={(event) => updateAnswer(item.question, event.target.value)}
+                    placeholder="Your answer…"
+                  />
+                </div>
+              ))}
+              <button
+                className="button"
+                onClick={() => extractRequirements(extractAnswers)}
+                disabled={
+                  status !== "online" ||
+                  extracting ||
+                  Object.values(extractAnswers).every((a) => a.trim().length === 0)
+                }
+              >
+                {extracting ? "Extracting…" : "⚙ Re-extract with answers"}
+              </button>
+            </div>
+          )}
         </section>
       )}
 

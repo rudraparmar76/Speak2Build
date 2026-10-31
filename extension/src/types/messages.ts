@@ -15,7 +15,25 @@ export type WebviewToHost =
   | { type: "stopRecording" }
   | { type: "cancelRecording" }
   /** Transcribe a stored recording by id. */
-  | { type: "transcribe"; audioId: string };
+  | { type: "transcribe"; audioId: string }
+  /** Extract structured requirements from the (edited) transcript. */
+  | { type: "extractRequirements"; transcript: string; answers?: Record<string, string> };
+
+export type ClarificationInfo = {
+  question: string;
+  reason?: string;
+  answer?: string | null;
+};
+
+export type RequirementResult = {
+  task: string;
+  language: string;
+  inputs: string[];
+  outputs: string[];
+  constraints: string[];
+  acceptanceCriteria: string[];
+  clarifications: ClarificationInfo[];
+};
 
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string; transcription?: string }
@@ -24,6 +42,7 @@ export type HostToWebview =
   | { type: "recordingCancelled" }
   | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
   | { type: "transcription"; audioId: string; language?: string; text: string; segments: Array<{ start: number; end: number; text: string }>; durationSeconds: number; processingSeconds: number }
+  | { type: "requirements"; requirement: RequirementResult; model: string; processingSeconds: number; repaired: boolean }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

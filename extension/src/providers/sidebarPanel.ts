@@ -101,6 +101,32 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           });
           break;
         }
+        case "extractRequirements": {
+          const extraction = await client.extractRequirements(
+            message.transcript,
+            message.answers,
+          );
+          this.post({
+            type: "requirements",
+            requirement: {
+              task: extraction.requirement.task,
+              language: extraction.requirement.language,
+              inputs: extraction.requirement.inputs,
+              outputs: extraction.requirement.outputs,
+              constraints: extraction.requirement.constraints,
+              acceptanceCriteria: extraction.requirement.acceptance_criteria,
+              clarifications: extraction.requirement.clarifications.map((item) => ({
+                question: item.question,
+                reason: item.reason ?? undefined,
+                answer: item.answer ?? undefined,
+              })),
+            },
+            model: extraction.model,
+            processingSeconds: extraction.processing_seconds,
+            repaired: extraction.repaired,
+          });
+          break;
+        }
         default: {
           // Exhaustiveness guard: if a new WebviewToHost variant is added
           // without a case here, TypeScript flags this as an unhandled type.

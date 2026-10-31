@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
 from app.schemas.common import HealthResponse, PingRequest, PingResponse
+from app.schemas.requirements import ExtractRequest, ExtractionResponse
 from app.schemas.transcription import (
     TranscribeRequest,
     TranscriptionResponse,
@@ -18,7 +19,12 @@ from app.schemas.transcription import (
 )
 from app.services import audio_store
 from app.services import recorder as audio_recorder
+from app.services import requirements as requirements_service
 from app.services import transcription as transcription_service
+from app.services.llm_client import (
+    LLMRequestError,
+    LLMUnavailableError,
+)
 
 router = APIRouter()
 
@@ -155,4 +161,38 @@ def transcribe(payload: TranscribeRequest) -> TranscriptionResponse:
         processing_seconds=result.processing_seconds,
         text=text,
         segments=[TranscriptSegment(**seg.__dict__) for seg in result.segments],
+    )
+
+
+@router.post("/api/requirements", response_model=ExtractionResponse)
+def extract_requirements(payload: ExtractRequest) -> ExtractionResponse:
+    """Turn a (possibly edited) transcript into structured requirements.
+
+    Error taxonomy: 503 unconfigured/unreachable provider, 502 provider error,
+    422 schema-unrepairable model output. Ambiguity itself is NOT an error —
+    it arrives as `clarifications` inside a 200.
+    """
+    if not requirements_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No LLM configured. Set SPEAK2BUILD_LLM_MODEL "
+                "(+ SPEAK2BUILD_LLM_BASE_URL / SPEAK2BUILD_LLM_API_KEY) "
+                "and restart the backend."
+            ),
+        )
+    try:
+        outcome = requirements_service.extract_from(payload.transcript, payload.answers)
+    except LLMUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}") from exc
+    except requirements_service.RequirementExtractionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return ExtractionResponse(
+        requirement=outcome.requirement,
+        model=outcome.model,
+        processing_seconds=outcome.processing_seconds,
+        repaired=outcome.repaired,
     )

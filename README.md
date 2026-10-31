@@ -20,7 +20,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 0 | Extension ↔ React sidebar ↔ FastAPI backend connection | ✅ Done |
 | 1 | Voice recording + audio upload | ✅ Done |
 | 2 | faster-whisper transcription + editable transcript | ✅ Done |
-| 3 | LLM requirement extraction, ambiguity detection, clarifications | Planned |
+| 3 | LLM requirement extraction, ambiguity detection, clarifications | ✅ Code done — live LLM test pending your provider/key |
 | 4 | Project context inspection (safe, bounded) | Planned |
 | 5 | Project-aware code generation + unified diffs | Planned |
 | 6 | Diff review, approve/reject, patch apply, validation | Planned |
@@ -65,6 +65,12 @@ Speech model configuration (environment variables):
 | `SPEAK2BUILD_WHISPER_MODEL` | `small` | Model size (`base`, `small`, `medium`…) |
 | `SPEAK2BUILD_WHISPER_DEVICE` | `cpu` | `cpu` (or `cuda` if you have NVIDIA + CUDA) |
 | `SPEAK2BUILD_WHISPER_COMPUTE_TYPE` | `int8` | Quantization for CPU speed/memory |
+| `SPEAK2BUILD_LLM_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint (Ollama `http://127.0.0.1:11434/v1`, LM Studio `http://127.0.0.1:1234/v1`, Groq…) |
+| `SPEAK2BUILD_LLM_MODEL` | *(none — disables LLM features)* | Model name, e.g. `gpt-4o-mini` or `llama3.1` |
+| `SPEAK2BUILD_LLM_API_KEY` | *(none)* | Sent as `Bearer`; optional for local servers |
+| `SPEAK2BUILD_LLM_TIMEOUT` | `60` | LLM request timeout (seconds) |
+
+Keys exist only in environment variables — never in code or the extension.
 
 ### 2. Extension
 
@@ -117,10 +123,13 @@ npm run build        # esbuild → dist/extension.js + media/webview/*
 npm run typecheck    # tsc --noEmit
 ```
 
-## Current Limitations (Milestone 2)
+## Current Limitations (Milestone 3)
 
-- Recording + transcription only — no requirement extraction or code
-  generation yet (Milestone 3+).
+- **M3 live LLM verification pending** — all 21 LLM-path tests pass with fake
+  providers and `httpx.MockTransport`; real-provider extraction needs you to
+  set the LLM env vars (table above) and restart the backend.
+- Recording + transcription only — no code generation yet (Milestone 5).
+- Requirement extraction is single-shot per call; no requirement history yet.
 - Transcription happens synchronously at request time (CPU); long inputs may
   take roughly real-time to slightly faster. A queue/job API is deferred until
   M7 measurements say it's needed.
