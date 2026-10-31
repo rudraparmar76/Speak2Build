@@ -54,12 +54,31 @@ python -m venv .venv
 
 The backend listens on `http://127.0.0.1:8000` (loopback only).
 
-### 2. Extension (debug run)
+### 2. Extension
 
-Open the repository root in VS Code and press **F5** ("Run Speak2Build
-Extension"). A new VS Code window starts with the extension loaded. Click the
-Speak2Build icon in the Activity Bar (left side). The panel shows the backend
-connection status, a voice recorder, and a ping test form.
+**With the debugger (recommended while developing):** open the repository root
+in VS Code and press **F5** ("Run Speak2Build Extension"). This rebuilds and
+launches a dedicated *Extension Development Host* window with the extension
+loaded and breakpoints attached.
+
+**Without the debugger:** run `run-extension.cmd` at the repository root, or:
+
+```powershell
+cd extension
+npm run build
+code --extensionDevelopmentPath=D:\Speak2Build\extension
+```
+
+**Permanent install (outside development):**
+
+```powershell
+cd extension
+npx @vscode/vsce package
+code --install-extension speak2build-0.1.0.vsix
+```
+
+Then click the Speak2Build icon in the Activity Bar. The panel shows the
+backend connection status, a voice recorder, and a ping test form.
 
 Recording: press **Record** (allow the microphone when VS Code asks), speak,
 press **Stop**. The recording is converted to 16 kHz mono WAV inside the
