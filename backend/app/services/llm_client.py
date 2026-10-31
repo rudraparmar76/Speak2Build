@@ -15,8 +15,16 @@ without code changes):
 
 import dataclasses
 import os
+from pathlib import Path
 
 import httpx
+
+# Load .env from the backend directory so local dev works without `setx`
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except Exception:
+    pass  # dotenv optional; env vars may come from the shell instead
 
 BASE_URL_ENV = "SPEAK2BUILD_LLM_BASE_URL"
 MODEL_ENV = "SPEAK2BUILD_LLM_MODEL"

@@ -125,10 +125,6 @@ npm run typecheck    # tsc --noEmit
 
 ## Current Limitations (Milestone 3)
 
-- **M3 live LLM verification pending** — all 21 LLM-path tests pass with fake
-  providers and `httpx.MockTransport`; real-provider extraction needs you to
-  set the LLM env vars (table above) and restart the backend.
-- Recording + transcription only — no code generation yet (Milestone 5).
 - Requirement extraction is single-shot per call; no requirement history yet.
 - Transcription happens synchronously at request time (CPU); long inputs may
   take roughly real-time to slightly faster. A queue/job API is deferred until

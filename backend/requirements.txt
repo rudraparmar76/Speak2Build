@@ -10,5 +10,6 @@ faster-whisper>=1.2
 # faster-whisper 1.2.1 calls av.open(..., metadata_errors=...) which av 18+ removed;
 # pinned until faster-whisper updates its av usage.
 av<18
+python-dotenv>=1.0
 pytest>=8.0
 httpx>=0.27

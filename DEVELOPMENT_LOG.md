@@ -1,17 +1,18 @@
 # Speak2Build — Development Log
 
-## Milestone 3 — Requirement Intelligence ✅ (live LLM verification pending)
+## Milestone 3 — Requirement Intelligence ✅ (live verification complete)
 
 **Goal:** turn the editable transcript into structured, validated requirements — with ambiguity surfaced as answerable clarification questions, not silently guessed away.
 
 ### Completed
 
-- [x] `services/llm_client.py`: provider-agnostic OpenAI-compatible client (covers OpenAI, Ollama, LM Studio, Groq, vLLM…). Env-only config (`SPEAK2BUILD_LLM_BASE_URL/_MODEL/_API_KEY/_TIMEOUT`); no keys hardcoded anywhere.
+- [x] `services/llm_client.py`: provider-agnostic OpenAI-compatible client (covers OpenAI, Ollama, LM Studio, Groq, NVIDIA NIM…). Env-only config (`SPEAK2BUILD_LLM_BASE_URL/_MODEL/_API_KEY/_TIMEOUT`); no keys hardcoded anywhere; `.env` auto-loaded via `python-dotenv`.
 - [x] `services/requirements.py`: structured extraction with a **validate→feedback→retry repair loop** (Pydantic validation errors are sent back to the LLM; bounded at 2 attempts), fence/prose-tolerant JSON parsing, and deterministic answer reconciliation against clarification questions.
 - [x] `POST /api/requirements` with a deliberate error taxonomy: 503 (unconfigured/unreachable), 502 (provider error), 422 (unrepairable output). Ambiguity arrives as `clarifications` inside a 200 — it is information, not failure.
 - [x] Sidebar flow: **⚙ Extract requirements** on the transcript card → requirements card (task, inputs/outputs/constraints/acceptance criteria, meta: model · repaired · seconds) → per-question answer inputs → **⚙ Re-extract with answers**.
 - [x] Transcript never leaves the machine unbounded: capped at 8 000 chars per call; project files are not sent (M4 boundary, documented).
 - [x] 21 new tests (42 total green): LLM client via `httpx.MockTransport` (auth header, error shapes, empty/broken bodies), service-level repair loop with scripted FakeLLM (first-pass parse, repair retries carrying the real validation error, terminal failure, answer merge, prompt building), route mapping (503/502/422 + happy path + passthrough of answers).
+- [x] **Live end-to-end verification with NVIDIA Nemotron-3-Ultra**: TTS → upload → transcribe → extract → answer one clarification → re-extract with answer merged. All stages green.
 
 ### Bugs & Fixes
 
@@ -19,17 +20,17 @@
 - **Lazy generator `.throw` in test lambdas** — `lambda: (gen).throw(...)` *returns a generator that would throw when iterated*; the mock never raised. Replaced with an explicit `_raise()` helper. Lesson: a lambda that "raises lazily" isn't a raising callable.
 - **FastAPI `null` vs TS `undefined`** — Pydantic `str | None` serialized as `null` broke `ClarificationInfo` (`string | undefined`). Normalized at the bridge (`?? undefined` at the host boundary, the single conversion point).
 - **Missing re-export** — `requirements` module exported `LLMUnavailableError` but not `LLMRequestError`; tests caught the gap. Keep module `__all__` surfaces complete when tests patch through them.
+- **`.env` not auto-loaded** — `os.environ.get()` doesn't read `.env` files. Added `python-dotenv` + `load_dotenv()` at `llm_client.py` import time (backend-root `.env`), optional so system env vars still win.
 
 ### Verification Performed
 
 - `pytest`: 42 passed. `npm run build` + `tsc --noEmit`: clean.
-- Live smoke: backend restarted; unconfigured `POST /api/requirements` returns the exact actionable 503 hint; health still reports STT warm-up state.
-- **Not yet verifiable by me: a real LLM extraction round-trip** — requires your provider choice + credentials (env only). Everything else is green.
+- **Full live loop**: SAPI TTS spoke *"Create a function that validates the user email and prevents duplicate registrations"* → uploaded → Whisper transcribed word-perfect → Nemotron-3-Ultra extracted structured requirement with 5 clarifications → answered first clarification ("Use SQLite with UNIQUE email column") → re-extracted → **answer folded into requirement (task + constraints now reference SQLite), 5 follow-up clarifications generated**. Backend left running with the updated code.
 
 ### Next Steps
 
-1. You pick the provider and set env vars (see README table); then the joint live check: speak → transcribe → extract → answer one clarification → re-extract.
-2. Milestone 4 — Project Context: workspace scanning (language/files), requirement-to-file hints, bounded dialog to send only relevant snippets (explicitly no auto-modification).
+1. Milestone 4 — Project Context: workspace scanning (language/files), requirement-to-file hints, bounded dialog to send only relevant snippets (explicitly no auto-modification).
+2. Milestone 5 — Code Generation: LLM → unified diff patches, validation, apply/revert.
 
 ---
 
