@@ -1,5 +1,49 @@
 # Speak2Build — Development Log
 
+## Milestone 4 — Project Context ✅
+
+**Goal:** give the LLM bounded, user-consented access to the workspace — language detection, file tree, and heuristic relevance scoring — without ever sending unapproved file contents.
+
+### Completed
+
+- [x] `services/project_context.py`: workspace scan (walks directory, skips `.git`, `node_modules`, `__pycache__`, build dirs; detects languages by extension), heuristic relevance scoring (token overlap between requirement and file paths, path-pattern bonuses for test/api/config files), bounded snippet extraction (head ~80 lines for imports/defs + tail, capped at 200 lines/file and 8 000 chars total).
+- [x] `schemas/context.py`: `ScanRequest/Response` (workspace root, languages, file tree), `RelevantRequest/Response` (requirement text, user-selected file paths, workspace root, snippets with line ranges).
+- [x] `POST /api/context/scan` — metadata-only scan, returns languages + file tree.
+- [x] `POST /api/context/relevant` — takes requirement + file paths + workspace root, returns scored snippets.
+- [x] Sidebar flow: **🔍 Scan workspace** → file tree with checkboxes → select files → **📥 Get relevant context** → snippet preview (path, language, line range, content).
+- [x] Privacy by design: only user-checked files are read; snippets are bounded; full file contents never leave the machine unapproved.
+- [x] 10 new tests (52 total green): scan (languages, tree structure, skip dirs, max_files limit), relevance scoring (path overlap, pattern bonuses, test file bonus), snippet extraction (small/large files, char budget, path traversal rejection).
+- [x] Live verification: scanned Speak2Build repo (64 files, 48 scanned, 6 languages detected), relevance query returned 2 snippets (routes.py + test_recorder.py) at 8 030 chars, truncated to budget.
+
+### Technical Decisions
+
+1. **Heuristic scoring, not embeddings** — no vector DB, no external deps. Token overlap (requirement words vs path tokens) + path-pattern bonuses (test_*, api, config) + content overlap sampling. Explainable, fast, zero-dep.
+2. **Two-phase: scan → select → relevant** — scan is fast (metadata only). User explicitly selects files. Relevance runs *after* selection, so the LLM never sees unapproved paths.
+3. **Bounded snippets** — head region (imports, class/def signatures) + tail region (tests, main logic). Truncation marker inserted. Total budget 8k chars enforced.
+4. **Workspace root from VS Code** — the host resolves `${workspaceFolder}` to the first workspace folder, so the backend never guesses.
+
+### Bugs & Fixes
+
+- **`Path` not imported in routes.py** — quick fix, caught by live test.
+- **Workspace root calculation from relative paths** — `os.path.commonpath` on relative paths gave wrong root. Fixed by making `workspace_root` an explicit required parameter in `RelevantRequest`.
+- **FileNode type mismatch** — backend returns snake_case (`is_dir`, `size_bytes`), frontend expects camelCase (`isDir`, `sizeBytes`). Added `mapFileNode` in sidebarPanel.ts to convert at the boundary.
+- **`FileNode` not exported from backendClient.ts** — exported the interface for cross-module use.
+
+### Verification Performed
+
+- `pytest`: **52 passed**. `npm run build` + `tsc --noEmit`: clean.
+- **Live scan**: Speak2Build repo → 64 total files, 48 scanned, 6 languages (python, typescript, javascript, css, json, markdown).
+- **Live relevance**: requirement "Create a function that validates email format and prevents duplicate registrations using SQLite" + 5 file paths → 2 snippets (routes.py, test_recorder.py), 8 030 chars, truncated to budget.
+- Backend left running (pid 10656).
+
+### Next Steps
+
+1. Milestone 5 — Code Generation: LLM → unified diff patches, validation, apply/revert.
+2. Milestone 6 — Review/Validation: diff preview, approve/reject, patch apply, validation.
+3. Milestone 7 — Evaluation & Polish: 20-task suite, metrics, demo.
+
+---
+
 ## Milestone 3 — Requirement Intelligence ✅ (live verification complete)
 
 **Goal:** turn the editable transcript into structured, validated requirements — with ambiguity surfaced as answerable clarification questions, not silently guessed away.

@@ -1,8 +1,13 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 
-import type { HostToWebview, WebviewToHost } from "../types/messages";
+import type {
+  WebviewToHost,
+  HostToWebview,
+  FileNode as FrontendFileNode,
+} from "../types/messages";
 import { BackendClient, describeError } from "../services/backendClient";
+import type { FileNode as BackendFileNode } from "../services/backendClient";
 
 /**
  * Owns the sidebar webview lifecycle:
@@ -127,6 +132,67 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           });
           break;
         }
+        case "scanContext": {
+          // Resolve workspace root: if the webview sends "${workspaceFolder}",
+          // use the first workspace folder; otherwise use the provided path.
+          let workspaceRoot = message.workspaceRoot;
+          if (workspaceRoot === "${workspaceFolder}") {
+            const folders = vscode.workspace.workspaceFolders;
+            if (folders && folders.length > 0) {
+              workspaceRoot = folders[0].uri.fsPath;
+            } else {
+              this.post({
+                type: "hostError",
+                message: "No workspace folder open. Open a folder first.",
+              });
+              return;
+            }
+          }
+          const result = await client.scanContext(workspaceRoot);
+          this.post({
+            type: "contextScan",
+            result: {
+              workspaceRoot: result.workspace_root,
+              languages: result.languages,
+              fileTree: this.mapFileNode(result.file_tree),
+              totalFiles: result.total_files,
+              scannedFiles: result.scanned_files,
+            },
+          });
+          break;
+        }
+        case "getRelevantContext": {
+          // Resolve workspace root from VS Code workspace folders
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          const result = await client.getRelevantContext(
+            message.requirementText,
+            message.filePaths,
+            workspaceRoot,
+          );
+          this.post({
+            type: "contextRelevant",
+            result: {
+              snippets: result.snippets.map((s) => ({
+                path: s.path,
+                language: s.language,
+                content: s.content,
+                startLine: s.start_line,
+                endLine: s.end_line,
+              })),
+              totalChars: result.total_chars,
+              truncated: result.truncated,
+            },
+          });
+          break;
+        }
         default: {
           // Exhaustiveness guard: if a new WebviewToHost variant is added
           // without a case here, TypeScript flags this as an unhandled type.
@@ -137,6 +203,17 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       this.post({ type: "hostError", message: describeError(error, this.getBackendUrl()) });
     }
+  }
+
+  private mapFileNode(node: BackendFileNode): FrontendFileNode {
+    return {
+      name: node.name,
+      path: node.path,
+      isDir: node.is_dir,
+      language: node.language,
+      sizeBytes: node.size_bytes,
+      children: node.children?.map((c: BackendFileNode) => this.mapFileNode(c)),
+    };
   }
 
   private post(message: HostToWebview): void {

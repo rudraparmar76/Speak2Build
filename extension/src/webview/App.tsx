@@ -4,8 +4,12 @@ import { RecorderCard, type RecorderState } from "./components/RecorderCard";
 import { getVsCodeApi } from "./bridge";
 import type {
   ClarificationInfo,
+  FileNode,
   HostToWebview,
+  RelevantResult,
   RequirementResult,
+  ScanResult,
+  Snippet,
 } from "../types/messages";
 
 const vscode = getVsCodeApi();
@@ -65,6 +69,13 @@ export function App() {
   const [extractAnswers, setExtractAnswers] = useState<Record<string, string>>({});
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [relevantResult, setRelevantResult] = useState<RelevantResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [fetchingRelevant, setFetchingRelevant] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -177,8 +188,30 @@ export function App() {
           setTranscribingId(null);
           setExtracting(false);
           setExtractError(message.message);
+          setScanning(false);
+          setFetchingRelevant(false);
+          setContextError(message.message);
           setRecorderError((prevRecorderError) => message.message);
           pushHistory(`Error: ${message.message}`);
+          break;
+        }
+        case "contextScan": {
+          setScanning(false);
+          setContextError(null);
+          setScanResult(message.result);
+          setSelectedFiles(new Set());
+          setRelevantResult(null);
+          pushHistory(`Workspace scanned: ${message.result.languages.join(", ")} · ${message.result.scannedFiles} files`);
+          break;
+        }
+        case "contextRelevant": {
+          setFetchingRelevant(false);
+          setContextError(null);
+          setRelevantResult(message.result);
+          pushHistory(
+            `Context gathered: ${message.result.snippets.length} snippets · ${message.result.totalChars} chars` +
+              (message.result.truncated ? " (truncated)" : ""),
+          );
           break;
         }
       }
@@ -246,10 +279,101 @@ export function App() {
     setExtractAnswers((current) => ({ ...current, [question]: value }));
   }, []);
 
+  const scanWorkspace = useCallback(() => {
+    vscode.postMessage({ type: "scanContext", workspaceRoot: "${workspaceFolder}" });
+    setScanning(true);
+    setContextError(null);
+  }, []);
+
+  const toggleFileSelection = useCallback((path: string) => {
+    setSelectedFiles((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const collectFilePaths = useCallback((node: FileNode, acc: string[] = []): string[] => {
+    if (!node.isDir) {
+      acc.push(node.path);
+    } else {
+      node.children?.forEach((child) => collectFilePaths(child, acc));
+    }
+    return acc;
+  }, []);
+
+  const fetchRelevantContext = useCallback(() => {
+    if (transcript === null || transcript.text.trim().length < 3) return;
+    if (selectedFiles.size === 0) return;
+    setFetchingRelevant(true);
+    setContextError(null);
+    vscode.postMessage({
+      type: "getRelevantContext",
+      requirementText: transcript.text,
+      filePaths: Array.from(selectedFiles),
+    });
+  }, [transcript, selectedFiles]);
+
   const sendPing = useCallback(() => {
     pushHistory(`Sending: "${draft}"`);
     vscode.postMessage({ type: "ping", message: draft });
   }, [draft, pushHistory]);
+
+  // Render file tree with checkboxes
+  const renderFileTree = useCallback((node: FileNode): React.ReactNode => {
+    if (node.isDir) {
+      return (
+        <details key={node.path} className="file-tree-dir" open>
+          <summary className="file-tree-summary">
+            <span className="dir-name">📁 {node.name}</span>
+          </summary>
+          <div className="file-tree-children">
+            {node.children?.map((child) => renderFileTree(child))}
+          </div>
+        </details>
+      );
+    }
+    const isSelected = selectedFiles.has(node.path);
+    return (
+      <label key={node.path} className="file-tree-file">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleFileSelection(node.path)}
+        />
+        <span className={`file-name ${node.language ? `lang-${node.language}` : ""}`}>
+          📄 {node.name}
+        </span>
+      </label>
+    );
+  }, [selectedFiles, toggleFileSelection]);
+
+  // Render snippets
+  const renderSnippets = useCallback(() => {
+    if (!relevantResult || relevantResult.snippets.length === 0) return null;
+    return (
+      <div className="snippets">
+        <div className="sub-label">Relevant Snippets ({relevantResult.snippets.length})</div>
+        {relevantResult.snippets.map((snippet: Snippet, index: number) => (
+          <div key={index} className="snippet">
+            <div className="snippet-header">
+              <span className="snippet-path">{snippet.path}</span>
+              {snippet.language && <span className="hint">({snippet.language})</span>}
+              <span className="hint">lines {snippet.startLine}–{snippet.endLine}</span>
+            </div>
+            <pre className="snippet-content">{snippet.content}</pre>
+          </div>
+        ))}
+        {relevantResult.truncated && (
+          <p className="hint">⚠ Context truncated to fit budget ({relevantResult.totalChars} chars)</p>
+        )}
+      </div>
+    );
+  }, [relevantResult]);
 
   return (
     <main className="panel">
@@ -405,6 +529,44 @@ export function App() {
               </button>
             </div>
           )}
+        </section>
+      )}
+
+      {scanResult && (
+        <section className="card">
+          <div className="label">Project Context</div>
+          <p className="hint">
+            Detected: {scanResult.languages.join(", ") || "none"} · {scanResult.scannedFiles} files
+          </p>
+          <button
+            className="button"
+            onClick={scanWorkspace}
+            disabled={status !== "online" || scanning}
+          >
+            {scanning ? "Scanning…" : "🔍 Re-scan workspace"}
+          </button>
+          {contextError && <p className="error-text">{contextError}</p>}
+
+          <div className="file-tree">
+            {renderFileTree(scanResult.fileTree)}
+          </div>
+
+          <div className="file-selection-summary">
+            {selectedFiles.size > 0 && (
+              <>
+                <p className="hint">{selectedFiles.size} file(s) selected</p>
+                <button
+                  className="button"
+                  onClick={fetchRelevantContext}
+                  disabled={status !== "online" || fetchingRelevant || transcript === null}
+                >
+                  {fetchingRelevant ? "Fetching snippets…" : "📥 Get relevant context"}
+                </button>
+              </>
+            )}
+          </div>
+
+          {renderSnippets()}
         </section>
       )}
 

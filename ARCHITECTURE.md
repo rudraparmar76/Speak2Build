@@ -56,6 +56,18 @@ Pin note: `av<18` — faster-whisper 1.2.1 calls `av.open(..., metadata_errors=.
 `POST /api/requirements` error taxonomy: `503` unconfigured/unreachable provider, `502` provider rejected the request, `422` model output could not be repaired into schema-valid JSON. Ambiguity is *not* an error — it is `clarifications` inside a `200`.
 
 **Transcript-only data boundary:** only the (edited) transcript text leaves the machine, bounded to 8 000 chars; project files are never sent here — the (also bounded, separately consented) context job belongs to M4.
+
+### Project Context (M4)
+
+| File | Responsibility |
+|---|---|
+| `backend/app/services/project_context.py` | Workspace scan (walk, skip build/VCS dirs, detect languages by extension), heuristic relevance scoring (token overlap + path patterns), bounded snippet extraction (head/tail + imports region, ≤ 200 lines/file, ≤ 8k chars total) |
+| `backend/app/schemas/context.py` | `ScanRequest/Response` (workspace root, languages, file tree), `RelevantRequest/Response` (requirement text, file paths, workspace root, snippets with line ranges) |
+
+`POST /api/context/scan` returns a full file tree with language metadata. `POST /api/context/relevant` takes a requirement + user-selected file paths + workspace root, returns scored snippets. **No file contents are sent to the LLM without explicit user selection** — the sidebar shows the tree with checkboxes, the user picks, then snippets are fetched.
+
+**Privacy boundary:** only user-approved snippets leave the machine, bounded by line/char limits. Full file contents are never transmitted.
+
 | `extension/src/webview/*` | React UI. Renders state; never calls the backend or VS Code APIs directly — only `postMessage` |
 
 ### Backend (Python)

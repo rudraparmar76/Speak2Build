@@ -15,6 +15,10 @@ const RECORDING_STOP_TIMEOUT_MS = 15000;
 const TRANSCRIBE_TIMEOUT_MS = 180_000;
 /** LLM extraction round-trips can be slow; allow two minutes. */
 const REQUIREMENTS_TIMEOUT_MS = 120_000;
+/** Context scan can take a few seconds on large workspaces. */
+const CONTEXT_SCAN_TIMEOUT_MS = 30_000;
+/** Relevance scoring is fast; keep default. */
+const RELEVANT_TIMEOUT_MS = 15_000;
 
 export interface HealthResult {
   ok: boolean;
@@ -33,6 +37,23 @@ interface TranscriptionResponse {
   segments: Array<{ start: number; end: number; text: string }>;
 }
 
+export interface FileNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  language?: string;
+  size_bytes: number;
+  children?: FileNode[];
+}
+
+interface Snippet {
+  path: string;
+  language?: string;
+  content: string;
+  start_line: number;
+  end_line: number;
+}
+
 interface RequirementsApiResponse {
   requirement: {
     task: string;
@@ -46,6 +67,20 @@ interface RequirementsApiResponse {
   model: string;
   processing_seconds: number;
   repaired: boolean;
+}
+
+interface ScanResponse {
+  workspace_root: string;
+  languages: string[];
+  file_tree: FileNode;
+  total_files: number;
+  scanned_files: number;
+}
+
+interface RelevantResponse {
+  snippets: Snippet[];
+  total_chars: number;
+  truncated: boolean;
 }
 
 export interface AudioUploadResult {
@@ -151,6 +186,40 @@ export class BackendClient {
         body: JSON.stringify(body),
       },
       REQUIREMENTS_TIMEOUT_MS,
+    );
+  }
+
+  /** Scan workspace for languages and file tree (metadata only). */
+  async scanContext(workspaceRoot: string): Promise<ScanResponse> {
+    return await this.request<ScanResponse>(
+      "POST",
+      "/api/context/scan",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace_root: workspaceRoot }),
+      },
+      CONTEXT_SCAN_TIMEOUT_MS,
+    );
+  }
+
+  /** Get relevant snippets from selected files for a requirement. */
+  async getRelevantContext(
+    requirementText: string,
+    filePaths: string[],
+    workspaceRoot: string,
+  ): Promise<RelevantResponse> {
+    return await this.request<RelevantResponse>(
+      "POST",
+      "/api/context/relevant",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requirement_text: requirementText,
+          file_paths: filePaths,
+          workspace_root: workspaceRoot,
+        }),
+      },
+      RELEVANT_TIMEOUT_MS,
     );
   }
 

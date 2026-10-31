@@ -20,8 +20,8 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 0 | Extension ↔ React sidebar ↔ FastAPI backend connection | ✅ Done |
 | 1 | Voice recording + audio upload | ✅ Done |
 | 2 | faster-whisper transcription + editable transcript | ✅ Done |
-| 3 | LLM requirement extraction, ambiguity detection, clarifications | ✅ Code done — live LLM test pending your provider/key |
-| 4 | Project context inspection (safe, bounded) | Planned |
+| 3 | LLM requirement extraction, ambiguity detection, clarifications | ✅ Done |
+| 4 | Project context scanning, relevance scoring, bounded snippets | ✅ Done |
 | 5 | Project-aware code generation + unified diffs | Planned |
 | 6 | Diff review, approve/reject, patch apply, validation | Planned |
 | 7 | Evaluation suite (20 tasks) + metrics + demo | Planned |
@@ -123,7 +123,7 @@ npm run build        # esbuild → dist/extension.js + media/webview/*
 npm run typecheck    # tsc --noEmit
 ```
 
-## Current Limitations (Milestone 3)
+## Current Limitations (Milestone 4)
 
 - Requirement extraction is single-shot per call; no requirement history yet.
 - Transcription happens synchronously at request time (CPU); long inputs may

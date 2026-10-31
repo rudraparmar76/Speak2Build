@@ -17,7 +17,11 @@ export type WebviewToHost =
   /** Transcribe a stored recording by id. */
   | { type: "transcribe"; audioId: string }
   /** Extract structured requirements from the (edited) transcript. */
-  | { type: "extractRequirements"; transcript: string; answers?: Record<string, string> };
+  | { type: "extractRequirements"; transcript: string; answers?: Record<string, string> }
+  /** Scan workspace for project context. */
+  | { type: "scanContext"; workspaceRoot: string }
+  /** Request relevant snippets from user-selected files. */
+  | { type: "getRelevantContext"; requirementText: string; filePaths: string[] };
 
 export type ClarificationInfo = {
   question: string;
@@ -35,6 +39,37 @@ export type RequirementResult = {
   clarifications: ClarificationInfo[];
 };
 
+export type FileNode = {
+  name: string;
+  path: string;
+  isDir: boolean;
+  language?: string;
+  sizeBytes: number;
+  children?: FileNode[];
+};
+
+export type ScanResult = {
+  workspaceRoot: string;
+  languages: string[];
+  fileTree: FileNode;
+  totalFiles: number;
+  scannedFiles: number;
+};
+
+export type Snippet = {
+  path: string;
+  language?: string;
+  content: string;
+  startLine: number;
+  endLine: number;
+};
+
+export type RelevantResult = {
+  snippets: Snippet[];
+  totalChars: number;
+  truncated: boolean;
+};
+
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string; transcription?: string }
   | { type: "pingResult"; reply: string }
@@ -43,6 +78,8 @@ export type HostToWebview =
   | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
   | { type: "transcription"; audioId: string; language?: string; text: string; segments: Array<{ start: number; end: number; text: string }>; durationSeconds: number; processingSeconds: number }
   | { type: "requirements"; requirement: RequirementResult; model: string; processingSeconds: number; repaired: boolean }
+  | { type: "contextScan"; result: ScanResult }
+  | { type: "contextRelevant"; result: RelevantResult }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

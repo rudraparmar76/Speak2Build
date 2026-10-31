@@ -5,12 +5,20 @@ model. Business services will be added in later milestones and called from
 here, never inlined into the endpoint bodies.
 """
 
+import os
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
 from app.schemas.common import HealthResponse, PingRequest, PingResponse
+from app.schemas.context import (
+    RelevantRequest,
+    RelevantResponse,
+    ScanRequest,
+    ScanResponse,
+)
 from app.schemas.requirements import ExtractRequest, ExtractionResponse
 from app.schemas.transcription import (
     TranscribeRequest,
@@ -21,6 +29,7 @@ from app.services import audio_store
 from app.services import recorder as audio_recorder
 from app.services import requirements as requirements_service
 from app.services import transcription as transcription_service
+from app.services import project_context as context_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -195,4 +204,45 @@ def extract_requirements(payload: ExtractRequest) -> ExtractionResponse:
         model=outcome.model,
         processing_seconds=outcome.processing_seconds,
         repaired=outcome.repaired,
+    )
+
+
+@router.post("/api/context/scan", response_model=ScanResponse)
+def scan_context(payload: ScanRequest) -> ScanResponse:
+    """Scan a workspace for languages and file tree (metadata only, no contents)."""
+    try:
+        result = context_service.scan_workspace(payload.workspace_root, payload.max_files)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to scan workspace: {exc}") from exc
+
+    # Convert tree dict to FileNode model (pydantic handles recursive)
+    return ScanResponse(
+        workspace_root=str(result.root),
+        languages=sorted(result.languages),
+        file_tree=result.file_tree,
+        total_files=result.total_files,
+        scanned_files=result.scanned_files,
+    )
+
+
+@router.post("/api/context/relevant", response_model=RelevantResponse)
+def get_relevant_context(payload: RelevantRequest) -> RelevantResponse:
+    """Extract bounded snippets from user-selected files relevant to a requirement."""
+    workspace_root = Path(payload.workspace_root).resolve()
+
+    snippets, truncated = context_service.select_relevant_files(
+        requirement_text=payload.requirement_text,
+        file_paths=payload.file_paths,
+        workspace_root=workspace_root,
+        max_snippet_lines=payload.max_snippet_lines,
+        max_total_chars=payload.max_total_chars,
+    )
+
+    total_chars = sum(len(s["content"]) for s in snippets)
+    return RelevantResponse(
+        snippets=snippets,
+        total_chars=total_chars,
+        truncated=truncated,
     )
