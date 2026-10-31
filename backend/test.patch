@@ -1,6 +1,0 @@
---- /dev/null
-+++ b/src/simple.py
-@@ -0,0 +1,3 @@
-+import re
-+def validate_email(email: str) -> bool:
-+    return True
