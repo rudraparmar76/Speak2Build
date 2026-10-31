@@ -1,4 +1,4 @@
-"""Pydantic models for the audio bouquet of endpoints."""
+"""Pydantic models for the audio endpoints."""
 
 from pydantic import BaseModel
 
@@ -11,3 +11,10 @@ class AudioUploadResponse(BaseModel):
     sample_rate: int
     channels: int
     size_bytes: int
+
+
+class RecordingStartResponse(BaseModel):
+    """Technical facts about a recording session that just started."""
+
+    sample_rate: int
+    channels: int

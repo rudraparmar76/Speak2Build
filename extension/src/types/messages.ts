@@ -2,24 +2,24 @@
  * Message contract between the React webview and the extension host.
  *
  * A webview is a sandboxed iframe: it cannot reach VS Code APIs, the file
- * system, or arbitrary network endpoints. The ONLY channel in and out is
- * `postMessage`. Both sides are type-checked against these unions, so adding
- * a message type in one place keeps both ends honest.
- *
- * Flow for every feature:
- *   webview --WebviewToHost--> host --HTTP--> backend --HTTP--> host
- *   host --HostToWebview--> webview (React re-renders from state)
+ * system, the microphone, or arbitrary network endpoints. The ONLY channel in
+ * and out is `postMessage`. Neither side is a trust boundary shortcut: webview
+ * messages are small JSON commands; the host performs all privileged work.
  */
 
 export type WebviewToHost =
   | { type: "checkHealth" }
   | { type: "ping"; message: string }
-  /** `data` is a base64-encoded 16 kHz mono WAV recording. */
-  | { type: "uploadAudio"; data: string };
+  /** Start a microphone session owned by the local backend process. */
+  | { type: "startRecording" }
+  | { type: "stopRecording" }
+  | { type: "cancelRecording" };
 
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string }
   | { type: "pingResult"; reply: string }
+  | { type: "recordingStarted"; sampleRate: number; channels: number }
+  | { type: "recordingCancelled" }
   | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
   | { type: "hostError"; message: string };
 

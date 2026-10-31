@@ -9,9 +9,10 @@ import time
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.schemas.audio import AudioUploadResponse
+from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
 from app.schemas.common import HealthResponse, PingRequest, PingResponse
 from app.services import audio_store
+from app.services import recorder as audio_recorder
 
 router = APIRouter()
 
@@ -67,3 +68,42 @@ async def upload_audio(request: Request) -> AudioUploadResponse:
         channels=info.channels,
         size_bytes=len(body),
     )
+
+
+@router.post("/api/recording/start", response_model=RecordingStartResponse, status_code=201)
+def start_recording() -> RecordingStartResponse:
+    """Open the microphone and begin an in-memory recording session."""
+    try:
+        info = audio_recorder.start_recording()
+    except audio_recorder.RecordingBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except audio_recorder.MicrophoneUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RecordingStartResponse(sample_rate=info.sample_rate, channels=info.channels)
+
+
+@router.post("/api/recording/stop", response_model=AudioUploadResponse, status_code=201)
+def stop_recording() -> AudioUploadResponse:
+    """Finalize the active recording, store it, and return its metadata."""
+    try:
+        result = audio_recorder.stop_recording()
+    except audio_recorder.NoActiveRecordingError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return AudioUploadResponse(
+        audio_id=result.audio_id,
+        duration_seconds=result.duration_seconds,
+        sample_rate=result.sample_rate,
+        channels=result.channels,
+        size_bytes=result.size_bytes,
+    )
+
+
+@router.delete("/api/recording", status_code=204)
+def cancel_recording() -> None:
+    """Discard the active recording without storing anything."""
+    try:
+        audio_recorder.cancel_recording()
+    except audio_recorder.RecorderError:
+        # Nothing to cancel is already a fine outcome for a cancel request.
+        return None
+    return None

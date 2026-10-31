@@ -152,6 +152,16 @@ body {
   gap: 10px;
 }
 
+.link-button {
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: var(--vscode-font-family);
+}
+
 .record-button--active {
   background: var(--vscode-button-background);
   border: 1px solid var(--vscode-charts-red);

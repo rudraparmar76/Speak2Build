@@ -109,8 +109,10 @@ npm run typecheck    # tsc --noEmit
 
 - Recordings are stored by the backend but not yet transcribed (faster-whisper
   arrives in Milestone 2); the sidebar currently shows upload metadata only.
+- Recording requires the Windows "Let desktop apps access your microphone"
+  toggle (the backend records the mic, not the webview — the webview layer
+  categorically denies mic access in current VS Code builds).
+- One active recording session at a time (single global mic session).
+- Recordings cap at 120 seconds; no chunked upload for longer sessions yet.
 - The backend has no authentication — it is intentionally loopback-only.
-- The sidebar must be opened once for the health check to run; the webview
-  is created lazily by VS Code.
-- The 2-minute / 20 MB recording caps are MVP bounds; longer dictation would
-  need chunked upload (deliberately deferred).
+- Temp recordings accumulate; a store TTL/cleanup sweep comes with M2.

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { RecorderCard } from "./components/RecorderCard";
-import type { HostToWebview, VsCodeApi } from "../types/messages";
+import { RecorderCard, type RecorderState } from "./components/RecorderCard";
+import { getVsCodeApi } from "./bridge";
+import type { HostToWebview } from "../types/messages";
 
-declare const acquireVsCodeApi: () => VsCodeApi;
+const vscode = getVsCodeApi();
 
-const vscode = acquireVsCodeApi();
+const MAX_RECORDING_MS = 120_000;
 
 type BackendStatus = "connecting" | "online" | "offline";
-type UploadStatus = "idle" | "uploading";
 
 interface HistoryEntry {
   id: number;
@@ -29,7 +29,10 @@ export function App() {
   const [statusDetail, setStatusDetail] = useState("Contacting backend…");
   const [draft, setDraft] = useState("Hello Speak2Build");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+
+  const [recorderState, setRecorderState] = useState<RecorderState>("idle");
+  const [recorderError, setRecorderError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [lastUpload, setLastUpload] = useState<UploadInfo | null>(null);
 
   const pushHistory = useCallback((text: string) => {
@@ -37,6 +40,11 @@ export function App() {
       { id: Date.now() + Math.random(), text, timestamp: new Date().toLocaleTimeString() },
       ...items.slice(0, 19),
     ]);
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    setRecorderState("stopping");
+    vscode.postMessage({ type: "stopRecording" });
   }, []);
 
   // Listen for everything the extension host sends back.
@@ -58,8 +66,17 @@ export function App() {
           pushHistory(`Round-trip OK — backend echoed: "${message.reply}"`);
           break;
         }
+        case "recordingStarted": {
+          setRecorderState("recording");
+          setElapsedMs(0);
+          setRecorderError(null);
+          pushHistory(
+            `Recording… (${message.sampleRate} Hz, ${message.channels} ch, backend-owned mic)`,
+          );
+          break;
+        }
         case "audioUploaded": {
-          setUploadStatus("idle");
+          setRecorderState("idle");
           setLastUpload({
             audioId: message.audioId,
             durationSeconds: message.durationSeconds,
@@ -68,13 +85,26 @@ export function App() {
             sizeBytes: message.sizeBytes,
           });
           pushHistory(
-            `Audio uploaded: ${message.durationSeconds.toFixed(1)}s @ ${message.sampleRate} Hz, ` +
+            `Recording stored: ${message.durationSeconds.toFixed(1)}s @ ${message.sampleRate} Hz, ` +
               `${(message.sizeBytes / 1024).toFixed(0)} KB (id ${message.audioId.slice(0, 8)}…)`,
           );
           break;
         }
+        case "recordingCancelled": {
+          setRecorderState("idle");
+          pushHistory("Recording cancelled — nothing stored.");
+          break;
+        }
         case "hostError": {
-          setUploadStatus("idle");
+          // If a recorder operation was in flight, return the card to idle
+          // and show the reason at the point of interaction.
+          setRecorderState((current) => {
+            if (current !== "idle") {
+              return "idle";
+            }
+            return current;
+          });
+          setRecorderError((prevRecorderError) => message.message);
           pushHistory(`Error: ${message.message}`);
           break;
         }
@@ -89,15 +119,39 @@ export function App() {
     vscode.postMessage({ type: "checkHealth" });
   }, []);
 
-  const sendPing = useCallback(() => {
-    vscode.postMessage({ type: "ping", message: draft });
-  }, [draft]);
+  // Elapsed-time display while the backend owns the mic.
+  useEffect(() => {
+    if (recorderState !== "recording") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setElapsedMs((ms) => ms + 100);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [recorderState]);
 
-  const handleAudioReady = useCallback((base64Wav: string) => {
-    setUploadStatus("uploading");
-    pushHistory("Recording captured — uploading to backend…");
-    vscode.postMessage({ type: "uploadAudio", data: base64Wav });
-  }, [pushHistory]);
+  // Backend enforces the same cap; the UI also stops at 120 s.
+  useEffect(() => {
+    if (recorderState === "recording" && elapsedMs >= MAX_RECORDING_MS) {
+      stopRecording();
+    }
+  }, [recorderState, elapsedMs, stopRecording]);
+
+  const startRecording = useCallback(() => {
+    setRecorderError(null);
+    setRecorderState("starting");
+    vscode.postMessage({ type: "startRecording" });
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    setRecorderState("stopping");
+    vscode.postMessage({ type: "cancelRecording" });
+  }, []);
+
+  const sendPing = useCallback(() => {
+    pushHistory(`Sending: "${draft}"`);
+    vscode.postMessage({ type: "ping", message: draft });
+  }, [draft, pushHistory]);
 
   return (
     <main className="panel">
@@ -112,7 +166,14 @@ export function App() {
         </div>
       </section>
 
-      <RecorderCard onAudioReady={handleAudioReady} disabled={status !== "online" || uploadStatus === "uploading"} />
+      <RecorderCard
+        state={recorderState}
+        elapsedMs={elapsedMs}
+        error={recorderError}
+        disabled={status !== "online"}
+        onToggle={recorderState === "recording" ? stopRecording : startRecording}
+        onCancel={cancelRecording}
+      />
 
       {lastUpload && (
         <section className="card">

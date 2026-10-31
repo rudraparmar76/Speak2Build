@@ -6,17 +6,13 @@
  */
 
 const REQUEST_TIMEOUT_MS = 5000;
+/** Stop calls can elapse while audio drains, so allow a longer window. */
+const RECORDING_STOP_TIMEOUT_MS = 15000;
 
 export interface HealthResult {
   ok: boolean;
   version?: string;
   error?: string;
-}
-
-interface PingResponse {
-  echo: string;
-  received_chars: number;
-  timestamp: number;
 }
 
 export interface AudioUploadResult {
@@ -25,6 +21,11 @@ export interface AudioUploadResult {
   sample_rate: number;
   channels: number;
   size_bytes: number;
+}
+
+export interface RecordingStartResult {
+  sample_rate: number;
+  channels: number;
 }
 
 export class BackendClient {
@@ -57,20 +58,37 @@ export class BackendClient {
     return data.echo;
   }
 
-  /** Upload raw WAV bytes. The body is binary; no base64 over HTTP. */
-  async uploadAudio(bytes: Uint8Array): Promise<AudioUploadResult> {
-    return await this.request<AudioUploadResult>("POST", "/api/audio", {
-      // Runtime accepts any ArrayBufferView as a body; the DOM lib typings
-      // are stricter than the fetch implementations here (SharedArrayBuffer
-      // concern), so this boundary cast documents that gap.
-      body: bytes as unknown as BodyInit,
-      headers: { "Content-Type": "audio/wav" },
-    });
+  /** Start a microphone session on the backend process. */
+  async startRecording(): Promise<RecordingStartResult> {
+    return await this.request<RecordingStartResult>(
+      "POST",
+      "/api/recording/start",
+    );
   }
 
-  private async request<T>(method: string, path: string, init?: RequestInit): Promise<T> {
+  /** Finalize the active session; returns stored-recording metadata. */
+  async stopRecording(): Promise<AudioUploadResult> {
+    return await this.request<AudioUploadResult>(
+      "POST",
+      "/api/recording/stop",
+      {},
+      RECORDING_STOP_TIMEOUT_MS,
+    );
+  }
+
+  /** Discard the active session; 204 No Content on success. */
+  async cancelRecording(): Promise<void> {
+    await this.request<void>("DELETE", "/api/recording");
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    init?: RequestInit,
+    timeoutMs: number = REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
@@ -78,10 +96,15 @@ export class BackendClient {
         signal: controller.signal,
       });
       if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        throw new Error(
-          `Backend responded with HTTP ${response.status}${body ? `: ${body}` : ""}`,
-        );
+        const body = await response.json().catch((): string | null => null);
+        const detail =
+          body && typeof body === "object" && body !== null && "detail" in body
+            ? String((body as { detail: unknown }).detail)
+            : await response.text().catch(() => "");
+        throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+      }
+      if (response.status === 204) {
+        return undefined as T;
       }
       return (await response.json()) as T;
     } finally {
@@ -102,4 +125,10 @@ export function describeError(error: unknown, baseUrl: string): string {
     return error.message;
   }
   return String(error);
+}
+
+interface PingResponse {
+  echo: string;
+  received_chars: number;
+  timestamp: number;
 }

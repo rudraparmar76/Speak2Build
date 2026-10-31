@@ -62,21 +62,17 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           this.post({ type: "pingResult", reply });
           break;
         }
-        case "uploadAudio": {
-          // Decode the base64 recorded by the webview back into binary.
-          const bytes = Buffer.from(message.data, "base64");
-          if (bytes.length === 0) {
-            throw new Error("Received an empty audio payload from the sidebar.");
-          }
-          // Defense in depth: the backend enforces this limit too, but
-          // failing here avoids a pointless large HTTP round-trip.
-          const maxBytes = 20 * 1024 * 1024;
-          if (bytes.length > maxBytes) {
-            throw new Error(
-              `Recording is ${Math.round(bytes.length / (1024 * 1024))} MB; the limit is ${maxBytes / (1024 * 1024)} MB.`,
-            );
-          }
-          const result = await client.uploadAudio(bytes);
+        case "startRecording": {
+          const info = await client.startRecording();
+          this.post({
+            type: "recordingStarted",
+            sampleRate: info.sample_rate,
+            channels: info.channels,
+          });
+          break;
+        }
+        case "stopRecording": {
+          const result = await client.stopRecording();
           this.post({
             type: "audioUploaded",
             audioId: result.audio_id,
@@ -85,6 +81,11 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             channels: result.channels,
             sizeBytes: result.size_bytes,
           });
+          break;
+        }
+        case "cancelRecording": {
+          await client.cancelRecording();
+          this.post({ type: "recordingCancelled" });
           break;
         }
         default: {

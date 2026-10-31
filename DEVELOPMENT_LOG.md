@@ -1,58 +1,75 @@
 # Speak2Build — Development Log
 
-## Milestone 1 — Voice Recording ✅
+## Milestone 1 — Voice Recording ✅ (revised architecture)
 
-**Goal:** capture the developer's voice in the sidebar and deliver it to the backend as whisper-ready 16 kHz mono WAV.
+**Goal:** capture the developer's voice and deliver it to the backend as whisper-ready mono PCM WAV.
 
 ### Completed
 
-- [x] Mic capture via `getUserMedia` + `MediaRecorder` (webm/opus) with permission/error mapping.
-- [x] In-webview conversion: `decodeAudioData` → `OfflineAudioContext` (mono, 16 kHz) → hand-built PCM16 WAV encoder.
-- [x] Upload bridge: base64 over `postMessage`, binary `POST /api/audio` from the host.
-- [x] Backend `POST /api/audio`: size limit (20 MB → 413), WAV magic-byte + fmt validation (→ 415), UTF-8-ish UUID temp storage, metadata response.
-- [x] Backend `services/audio_store.py`: chunk-walking RIFF parser, id-format revalidation.
-- [x] UI: Record/Stop with timer + pulse, auto-stop at 2 min, captured-recording metadata card, activity log entries.
+- [x] Backend-owned microphone sessions: `POST /api/recording/start|stop`, `DELETE /api/recording`.
+- [x] `services/recorder.py`: PortAudio (`sounddevice`) mono 16 kHz capture callback → memory; watchdog auto-stop at 120 s; locked state machine (idle/recording/stopping); PCM16 WAV encode via numpy + stdlib `wave`.
+- [x] UI state: Record/Stop/Cancel with elapsed timer; recorder errors surfaced in the card; activity log entries; `types/messages.ts` contract extended (`startRecording`/`stopRecording`/`cancelRecording` ↔ `recordingStarted`/`recordingCancelled`/`audioUploaded`).
+- [x] `backendClient.ts`: `startRecording`/`stopRecording` (15 s stop timeout while audio drains)/`cancelRecording` (handles 204 no-content).
+- [x] FakeStream-injected unit tests of the state machine (busy/stop-without-start/cancel/auto-stop semantics).
+- [x] Live verification on real hardware through the HTTP API.
 
 ### Files Changed
 
-- NEW: `backend/app/services/audio_store.py`, `backend/app/schemas/audio.py`, `backend/tests/test_audio.py`, `extension/src/webview/components/RecorderCard.tsx`
-- MODIFIED: `backend/app/api/routes.py`, `extension/src/types/messages.ts`, `extension/src/services/backendClient.ts`, `extension/src/providers/sidebarPanel.ts`, `extension/src/webview/{App.tsx,styles.css}`, docs.
+- NEW: `backend/app/services/recorder.py`, `backend/tests/test_recorder.py`, `extension/src/webview/bridge.ts`, `run-extension.cmd`
+- MODIFIED: `backend/app/api/routes.py`, `backend/app/schemas/audio.py`, `backend/requirements.txt` (+`numpy`, +`sounddevice`), `extension/src/types/messages.ts`, `extension/src/services/backendClient.ts`, `extension/src/providers/sidebarPanel.ts`, `extension/src/webview/{App.tsx,styles.css,components/RecorderCard.tsx}`, docs.
+- RETAINED from original M1 attempt: `backend/app/services/audio_store.py` (WAV validation + UUID storage), `backend/app/schemas/audio.py`, `backend/tests/test_audio.py`, `POST /api/audio` — all reused by the recorder.
 
-### Technical Decisions
+### Architecture Revision (important lesson)
 
-1. **Browser-side transcode to WAV** (see ARCHITECTURE.md) — removes any FFmpeg/`pyav` system dependency; uploaded file is ready for M2 transcription. Cost: ~8× larger uploads vs opus, bounded by caps.
-2. **Base64 across the postMessage bridge, raw bytes over HTTP** — `postMessage` carries data safely as a string; the host decodes once and sends binary, so base64 overhead (33%) applies to one leg only.
-3. **Validate bytes, not headers** — spoofed `Content-Type` is trivial; the RIFF parser is the real gate. Tested with junk bytes → 415.
-4. **UUID filenames** — client never names files; `path_for()` re-regex-checks ids, so path traversal is structurally impossible.
-5. **Two-minute recording cap** — bounds memory (WAV encode lives in RAM) and upload size; auto-stop implemented in the recorder's timer effect.
+Original M1 design recorded audio **inside the webview** (`MediaRecorder` →
+in-browser decode/resample → hand-built WAV → base64 → host → upload).
+Diagnosis on the user's machine showed Chromium reporting
+`mic permission = denied` **without ever showing a prompt**. Research
+confirmed this is not a misconfiguration but a **VS Code platform
+constraint**: extension webviews are sandboxed iframes whose permissions
+policy blocks `getUserMedia` outright —
+[#113916](https://github.com/microsoft/vscode/issues/113916) ("blocked … for
+all iframe-based webviews"),
+[#250568](https://github.com/microsoft/vscode/issues/250568) ("Permissions
+policy violation: microphone is not allowed in this document"), consent-gated
+fix pending as proposed API
+[#323602](https://github.com/microsoft/vscode/issues/323602).
+Recording moved to the **backend process** (PortAudio via `sounddevice`),
+which requires only the standard Windows "desktop apps" microphone permission —
+the same layer that already permits VS Code/Copilot. The webview is reduced to
+timer/buttons/display, keeping the sandbox intact as a security feature.
+Full rationale + trade-offs: `ARCHITECTURE.md`.
 
 ### Bugs & Fixes
 
-- **TS 5.7 `BodyInit` typing rejects `Uint8Array`** despite Node/undici accepting any `ArrayBufferView` at runtime. Tried `Blob` wrapping (also failed the stricter `BlobPart` typing). Fixed with a documented boundary cast (`as unknown as BodyInit`) — then validated the cast empirically with a live Node probe against a real uvicorn (not just types).
-- **Stale backend on port 8000** caused 404s on `/api/audio`: a leftover dev server (from M0 testing) was still listening and serving old code. Diagnosed via `Errno 10048` bind failure; killed the stale pid, retested clean. Lesson: 404-from-live-server usually means "running stale code", check port ownership first.
+- **Recorder state on cancel**: `cancel()` released resources but forgot to reset the state machine → `state == "recording"` after cancel. Caught by `test_cancel_discards_without_storing`; fixed in `_cleanup_locked`.
+- **Missing callback method**: `start()` referenced `_on_audio` which was never written → immediate `AttributeError` in the first test run.
+- **Test helper**: accessed the fake stream before the factory ran (streams are created lazily by `start()`).
+- Earlier M1-attempt bugs worth remembering: TS 5.7 `BodyInit` typing vs runtime `Uint8Array` (boundary cast, then empirically validated), stale backend on port 8000 serving old code (404s on new routes).
 
 ### Verification Performed
 
-- `pytest`: **9 passed** (5 new: metadata+storage round-trip, non-WAV → 415, empty → 400, oversized → 413, compressed fmt → ValueError).
-- `npm run build` + `tsc --noEmit`: clean.
-- Live Node probe (`Temp/s2b-upload-probe.js`) against real uvicorn, using the extension's exact transport (Node fetch, `Uint8Array` body):
-  - valid WAV → `201 {audio_id:…, duration_seconds: 2, sample_rate: 16000, channels: 1, size_bytes: 64044}`
-  - junk bytes → `415` with readable detail
-  - stored file verified on disk under `TEMP/speak2build-audio/`.
-- Not executed by me (requires desktop/mic): actual F5 recording run. Manual check for you: Record → allow mic → speak → Stop → expect "Audio uploaded: …s @ 16000 Hz" in the log + metadata card.
+- `pytest`: **16 passed** (API, audio upload validation, recorder state machine incl. auto-stop and cancel semantics).
+- `npm run build` / `tsc --noEmit`: clean.
+- Live HTTP probe (real mic, extension-identical transport):
+  - start → `201 {"sample_rate":16000,"channels":1}`
+  - wait 1.5 s → stop → `201 {"duration_seconds":1.482,"size_bytes":47468,...}`; WAV persisted under `TEMP/speak2build-audio/`, size arithmetic checks (44 + 1.482×32,000)
+  - double start → `409`; cancel → `204`; stop-after-cancel → `409`
+  - backend left running afterward (pid recorded in session notes)
+- Not executed by me: interactive sidebar recording (user validation pending).
 
 ### Current Limitations
 
-- No transcription yet; recordings accumulate in temp (cleanup strategy comes with M2 pipeline or a store TTL).
-- Echo cancellation/noise suppression left on browser defaults (fine for single-speaker dictation).
-- No cancellation of an in-flight upload; UI disables Record while uploading instead.
+- No transcription yet; temp recordings accumulate (M2 adds the pipeline + a cleanup/TTL).
+- PortAudio defaults for echo cancel/noise suppression; default input device only (no picker).
+- Single global session (one mic, one recording at a time) — intentional MVP simplification.
 
 ### Next Steps (Milestone 2 — Speech Recognition)
 
-1. `requirements.txt`: add `faster-whisper` + `soundfile` (wheel availability verified beforehand on Python 3.14).
-2. `POST /api/transcribe` — load by validated `audio_id`, run small model, return segments + text + language.
-3. Model warm-loading at startup with configurable model name via env var; keep the transcription service swappable.
-4. Sidebar: editable transcript box fed by real segments; transcription failure states.
+1. Add `faster-whisper` (+ deps) — CTranslate2 cp314 wheel availability already verified.
+2. `POST /api/transcribe`: load by validated `audio_id`, run the small model, return language, text, segments.
+3. Warm-load the model at startup; model name configurable by env var; keep the transcription service swappable.
+4. Sidebar: editable transcript fed by real segments; transcription failure states.
 
 ---
 
@@ -95,7 +112,7 @@
   - Server stopped cleanly afterwards.
 - `npm run build` → both bundles emitted.
 - `npm run typecheck` → clean, no errors.
-- Not yet executed by me: the manual F5 run of the extension inside a real VS Code debug window (requires interactive desktop). Instructions verified at build level; full user-run check pending.
+- User (me via F5) confirmed visually: connected chip + echo round-trip worked.
 
 ### Bugs Encountered
 

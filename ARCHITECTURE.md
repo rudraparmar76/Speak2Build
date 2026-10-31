@@ -66,6 +66,19 @@ Response `200`: `{ "status": "ok", "version": "0.1.0" }`
 Request: `{ "message": string (1–2000 chars) }` → `422` if invalid.
 Response `200`: `{ "echo": string, "received_chars": int, "timestamp": float }`
 
+### `POST /api/recording/start`
+No body. Opens the backend's microphone and starts an in-memory session.
+Response `201`: `{ "sample_rate": int, "channels": int }`
+Errors: `409` session already active; `503` microphone unavailable (with OS-settings hint).
+
+### `POST /api/recording/stop`
+No body. Finalizes the active session, stores it (same validation/UUID storage as `POST /api/audio`).
+Response `201`: `AudioUploadResponse`.
+Errors: `409` no active session (including after auto-stop... auto-stop stores the result, so a late stop still returns `201`).
+
+### `DELETE /api/recording`
+Discards the active session. Response: `204 No Content`.
+
 ### `POST /api/audio`
 Request body: raw WAV bytes. Validated: size ≤ 20 MB → `413`; RIFF/WAVE PCM
 magic + fmt chunk checks → `415`; empty → `400`. Stored at
@@ -74,23 +87,38 @@ handle, and `audio_store.path_for()` re-validates its format before any path
 construction. Response `201`: `AudioUploadResponse` (id, duration, rate,
 channels, size).
 
-## Webview Recording Pipeline (Milestone 1)
+## Webview Recording Pipeline (Milestone 1, revised)
+
+Original design: record with `MediaRecorder` inside the webview iframe. This is
+**platform-impossible**: VS Code webviews run as sandboxed iframes whose
+Chromium permissions policy denies `getUserMedia` without ever prompting
+(microsoft/vscode#113916, #250568; consent-gated fix pending as proposed API
+#323602). Copilot's mic works because its capture is workbench-side, not
+webview-side.
+
+Revised design — **backend-owned microphone**:
 
 ```
-MediaRecorder (webm/opus chunks, 250 ms)
-  → Blob
-  → AudioContext.decodeAudioData        (container → PCM, in-browser)
-  → OfflineAudioContext(1, n, 16000)    (downmix mono + resample 16 kHz)
-  → encodeWav (manual RIFF/PCM16 writer)
-  → base64 string ──postMessage──▶ host Buffer.from(b64)
-  → POST /api/audio (raw bytes) ─▶ backend validates + stores
-  ◀── audioUploaded {audioId, durationSeconds, sampleRate, channels, sizeBytes}
+Record click (webview) ──▶ host ──POST /api/recording/start──▶ backend
+                               (PortAudio/sounddevice InputStream,
+                                mono 16 kHz float32, callback → memory)
+Stop click (webview)  ───▶ host ──POST /api/recording/stop───▶ backend
+                               (concatenate → PCM16 WAV → validate →
+                                UUID temp storage)
+                     ◀── {audioId, durationSeconds, sampleRate, channels, sizeBytes}
+Cancel click         ───▶ host ──DELETE /api/recording─────────▶ backend (204)
 ```
 
-Decision: conversion happens in the webview so the backend needs no FFmpeg;
-the stored file is exactly what faster-whisper consumes in M2. Trade-off:
-recordings are stored as WAV (≈32 KB/s) instead of opus (~4 KB/s) — bounded
-by the 2-minute/20 MB caps and irrelevant on loopback.
+Rationale: the mic permission then reduces to the standard Windows "desktop
+apps" toggle (same layer VS Code/Copilot already use), Python performs
+resample/encode with native numpy/wave code, no FFmpeg binary dependency, and
+the stored WAV is 16 kHz — whisper-ready for M2. Trade-off: single global
+session (one mic, one active recording — enforced by `RecordingBusyError`/409)
+and a short residual delay on stop while audio drains; acceptable for a
+single-user MVP tool.
+
+Recordings cap at 120 s, enforced twice: a backend watchdog timer (auto-finishes
+and stores) and a UI timer.
 
 
 ## Key Design Decisions
