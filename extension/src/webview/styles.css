@@ -671,3 +671,21 @@ body {
 .session-active-hint {
   margin: 4px 0 0 0;
 }
+
+/* ---------- Voice output (TTS) ---------- */
+.settings-gear-btn.muted {
+  opacity: 0.45;
+}
+
+.speaking-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-focusBorder);
+  background: var(--vscode-input-background);
+  font-size: 12px;
+}

@@ -1,0 +1,209 @@
+"""Backend-owned loudspeakers (text-to-speech playback).
+
+Why here, same reason as the microphone in `recorder.py`: webviews are
+sandboxed iframes with a restrictive permissions policy, while the backend is
+an ordinary desktop process allowed to open audio output devices.
+
+Design:
+- Synthesis uses Microsoft's free Edge neural voices (`edge-tts`, network
+  call). The result is an MP3 stream, decoded by PyAV (`av`, already a
+  faster-whisper dependency) into float32 PCM.
+- Playback uses the PortAudio default output device through `sounddevice`'s
+  play/stop pair — `sd.play()` drives playback on PortAudio's own thread and
+  returns immediately, so HTTP requests never wait for the utterance to end.
+- One speaker, one active utterance: starting a new utterance stops whatever
+  was still playing (mirrors the single recording-session rule).
+- Synthesis and playback are injectable so tests need neither the network
+  nor a sound card.
+"""
+
+import asyncio
+import io
+import os
+import threading
+from dataclasses import dataclass
+
+import av
+import numpy as np
+import sounddevice as sd
+
+VOICE_ENV = "SPEAK2BUILD_TTS_VOICE"
+RATE_ENV = "SPEAK2BUILD_TTS_RATE"
+
+DEFAULT_VOICE = "en-US-AndrewNeural"
+DEFAULT_RATE = "+0%"
+
+MAX_TEXT_CHARS = 2000
+
+_RATE_PATTERN = r"^[+-]\d{1,3}%$"
+
+
+class TTSError(Exception):
+    """Base class for speaker failures with HTTP-mappable semantics."""
+
+
+class SynthesisError(TTSError):
+    """The voice provider rejected the request or returned no audio."""
+
+
+class PlaybackUnavailableError(TTSError):
+    """PortAudio could not open any output device."""
+
+
+@dataclass(frozen=True)
+class SpeakResult:
+    """Facts about a started utterance."""
+
+    characters: int
+    duration_seconds: float
+    sample_rate: int
+    voice: str
+    rate: str
+
+
+def current_voice() -> tuple[str, str]:
+    """Resolve (voice, rate) from the environment with package defaults."""
+    voice = os.environ.get(VOICE_ENV, "").strip() or DEFAULT_VOICE
+    rate = os.environ.get(RATE_ENV, "").strip() or DEFAULT_RATE
+    return voice, rate
+
+
+async def _default_synthesize(text: str, voice: str, rate: str) -> bytes:
+    """Collect the MP3 stream produced by edge-tts for one utterance."""
+    import edge_tts  # deferred: keeps import cost off health checks
+
+    communicate = edge_tts.Communicate(text, voice, rate=rate)
+    chunks: list[bytes] = []
+    try:
+        async for part in communicate.stream():
+            if part.get("type") == "audio":
+                chunks.append(part["data"])  # type: ignore[union-attr]
+    except Exception as exc:  # noqa: BLE001 - unify provider errors
+        raise SynthesisError(f"voice provider rejected the request: {exc}") from exc
+    data = b"".join(chunks)
+    if not data:
+        raise SynthesisError("voice provider returned no audio")
+    return data
+
+
+def _default_decode(mp3_bytes: bytes) -> tuple[np.ndarray, int]:
+    """Decode MP3 into mono float32 samples in [-1.0, 1.0] plus sample rate."""
+    try:
+        container = av.open(io.BytesIO(mp3_bytes))
+        stream = container.streams.audio[0]
+        chunks: list[np.ndarray] = []
+        for frame in container.decode(stream):
+            chunk = frame.to_ndarray()
+            if chunk.ndim == 2:  # (channels, samples) → mono
+                chunk = chunk.mean(axis=0)
+            chunks.append(chunk.reshape(-1))
+        rate = int(stream.rate or 24000)
+        container.close()
+    except Exception as exc:  # noqa: BLE001
+        raise SynthesisError(f"could not decode synthesized audio: {exc}") from exc
+    if not chunks:
+        raise SynthesisError("synthesized audio contained no decodable frames")
+    samples = np.concatenate(chunks)
+    if samples.dtype != np.float32:
+        samples = samples.astype(np.float32)
+        peak = float(np.max(np.abs(samples))) if samples.size else 1.0
+        if peak > 1.0:
+            samples = samples / peak / 2.0  # int-family scaling heuristic
+    return samples, rate
+
+
+class PlaybackController:
+    """Thin seam over `sounddevice.play/stop` so tests can fake the hardware."""
+
+    def play(self, samples: np.ndarray, samplerate: int) -> None:
+        try:
+            sd.play(samples, samplerate)
+        except Exception as exc:  # noqa: BLE001
+            raise PlaybackUnavailableError(f"no usable audio output device: {exc}") from exc
+
+    def stop(self) -> None:
+        try:
+            sd.stop()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+class VoiceSpeaker:
+    """Process-global singleton: one utterance at a time, cancellable."""
+
+    def __init__(
+        self,
+        synthesizer=None,
+        decode=None,
+        playback: PlaybackController | None = None,
+    ) -> None:
+        self._synthesize = synthesizer or _default_synthesize
+        self._decode = decode or _default_decode
+        self._playback = playback or PlaybackController()
+        self._lock = threading.Lock()
+        self._utterance_counter = 0
+
+    def stop(self) -> bool:
+        with self._lock:
+            was_playing = self._utterance_counter > 0
+            self._utterance_counter = 0
+        self._playback.stop()
+        return was_playing
+
+    async def speak(self, text: str, voice: str | None = None, rate: str | None = None) -> SpeakResult:
+        """Synthesize then start non-blocking playback of one utterance.
+
+        `stop()` from any concurrent request cancels whatever is playing;
+        starting a new utterance also cancels the previous one implicitly.
+        """
+        resolved_voice, env_rate = current_voice()
+        resolved_voice = voice or resolved_voice
+        resolved_rate = rate or env_rate
+
+        with self._lock:
+            self._utterance_counter += 1
+
+        # Network synthesis first (already async), then decode on a worker
+        # thread so the ~tens-of-ms PCM conversion never blocks the event loop.
+        mp3_bytes = await self._synthesize(text, resolved_voice, resolved_rate)
+        samples, samplerate = await asyncio.to_thread(self._decode, mp3_bytes)
+
+        # Non-blocking: PortAudio drives playback on its own thread.
+        self._playback.play(samples, samplerate)
+
+        return SpeakResult(
+            characters=len(text),
+            duration_seconds=round(len(samples) / samplerate, 2) if samplerate else 0.0,
+            sample_rate=samplerate,
+            voice=resolved_voice,
+            rate=resolved_rate,
+        )
+
+
+speaker = VoiceSpeaker()
+
+
+async def speak(text: str, voice: str | None = None, rate: str | None = None) -> SpeakResult:
+    """Module-level entry point: play one utterance (swaps any current one)."""
+    return await speaker.speak(text, voice, rate)
+
+
+def stop() -> bool:
+    """Module-level entry point: cancel current playback."""
+    return speaker.stop()
+
+
+__all__ = [
+    "TTSError",
+    "SynthesisError",
+    "PlaybackUnavailableError",
+    "SpeakResult",
+    "PlaybackController",
+    "VoiceSpeaker",
+    "speaker",
+    "current_voice",
+    "MAX_TEXT_CHARS",
+    "DEFAULT_VOICE",
+    "VOICE_ENV",
+    "RATE_ENV",
+]

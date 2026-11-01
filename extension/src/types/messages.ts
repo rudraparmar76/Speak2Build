@@ -64,7 +64,11 @@ export type WebviewToHost =
   /** Discard the current board and start a fresh session. */
   | { type: "newSession" }
   /** Delete a saved session from history. */
-  | { type: "deleteSession"; sessionId: string };
+  | { type: "deleteSession"; sessionId: string }
+  /** Webview → host: read text aloud through the backend's speakers. */
+  | { type: "speak"; text: string; voice?: string }
+  /** Webview → host: cancel current playback. */
+  | { type: "stopSpeaking" };
 
 export type LlmConfigData = {
   provider: string;
@@ -227,7 +231,11 @@ export type HostToWebview =
       sessions: SessionMeta[];
     }
   /** Lightweight refresh after a background save (title list may change). */
-  | { type: "sessionList"; sessions: SessionMeta[] };
+  | { type: "sessionList"; sessions: SessionMeta[] }
+  /** Playback started on the backend. */
+  | { type: "speakingStarted"; characters: number; estimatedSeconds: number; voice: string }
+  /** Playback finished being cancelled / stopped. */
+  | { type: "speakingStopped" };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */
 export interface VsCodeApi {

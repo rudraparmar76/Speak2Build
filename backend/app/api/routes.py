@@ -43,6 +43,7 @@ from app.schemas.transcription import (
     TranscriptSegment,
 )
 from app.schemas.validation import TestRunRequest, TestRunResponse
+from app.schemas.tts import SpeakRequest, SpeakResponse, StopSpeakResponse
 from app.services import audio_store
 from app.services import recorder as audio_recorder
 from app.services import requirements as requirements_service
@@ -50,6 +51,7 @@ from app.services import transcription as transcription_service
 from app.services import project_context as context_service
 from app.services import code_generation as generation_service
 from app.services import validation as validation_service
+from app.services import tts as tts_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -471,3 +473,40 @@ def run_tests(payload: TestRunRequest) -> TestRunResponse:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Test validation failed: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Text-to-speech playback (Milestone 7, part 1)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/tts/play", response_model=SpeakResponse)
+async def speak_aloud(payload: SpeakRequest) -> SpeakResponse:
+    """Synthesize `text` with a neural voice and start playing it aloud.
+
+    Playback is non-blocking: the response carries the estimated duration of
+    the utterance while the audio is still playing on the backend's audio
+    thread. POST /api/tts/stop cancels it.
+    """
+    try:
+        started = await tts_service.speak(payload.text, payload.voice, payload.rate)
+    except tts_service.SynthesisError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except tts_service.TTSError as exc:
+        # Everything else is local: no usable output device, etc.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return SpeakResponse(
+        played=True,
+        characters=started.characters,
+        duration_seconds=started.duration_seconds,
+        sample_rate=started.sample_rate,
+        voice=started.voice,
+        rate=started.rate,
+    )
+
+
+@router.post("/api/tts/stop", response_model=StopSpeakResponse)
+def stop_speaking() -> StopSpeakResponse:
+    """Stop the current utterance (no-op success if nothing is playing)."""
+    was_playing = tts_service.stop()
+    return StopSpeakResponse(stopped=was_playing)

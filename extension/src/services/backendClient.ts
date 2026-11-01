@@ -23,6 +23,8 @@ const RELEVANT_TIMEOUT_MS = 15_000;
 const GENERATION_TIMEOUT_MS = 300_000;
 /** Diff apply is fast. */
 const APPLY_DIFF_TIMEOUT_MS = 10_000;
+/** TTS: network synthesis (1–3 s typical) + play-start only, never full playback. */
+const SPEAK_TIMEOUT_MS = 20_000;
 
 export interface HealthResult {
   ok: boolean;
@@ -121,6 +123,19 @@ export interface TestRunApiResponse {
   duration_seconds: number;
   summary: string;
   output: string;
+}
+
+export interface SpeakResponse {
+  played: boolean;
+  characters: number;
+  duration_seconds: number;
+  sample_rate: number;
+  voice: string;
+  rate: string;
+}
+
+export interface StopSpeakResponse {
+  stopped: boolean;
 }
 
 interface GenerationOptions {
@@ -387,6 +402,29 @@ export class BackendClient {
         }),
       },
       (timeoutSeconds + 5) * 1000,
+    );
+  }
+
+  /** Synthesize text and start non-blocking playback on the backend's speakers. */
+  async speak(text: string, voice?: string): Promise<SpeakResponse> {
+    return await this.request<SpeakResponse>(
+      "POST",
+      "/api/tts/play",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: voice || undefined }),
+      },
+      SPEAK_TIMEOUT_MS,
+    );
+  }
+
+  /** Cancel the utterance currently playing (no-op success when idle). */
+  async stopSpeaking(): Promise<StopSpeakResponse> {
+    return await this.request<StopSpeakResponse>(
+      "POST",
+      "/api/tts/stop",
+      { method: "POST" },
+      REQUEST_TIMEOUT_MS,
     );
   }
 

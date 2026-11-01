@@ -183,11 +183,43 @@ export function App() {
   // the autosave effect must not immediately save it back.
   const restoringRef = useRef(false);
 
+  // Voice output: spoken clarifications/summaries via the backend's speakers.
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
+  const speakingTimerRef = useRef<number | null>(null);
+
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
       { id: Date.now() + Math.random(), text, timestamp: new Date().toLocaleTimeString() },
       ...items.slice(0, 19),
     ]);
+  }, []);
+
+  /** Read text aloud through the backend's speakers (no-op when muted). */
+  const speakText = useCallback((text: string) => {
+    if (!voiceOn || !text.trim()) {
+      return;
+    }
+    setSpeaking(true);
+    vscode.postMessage({ type: "speak", text: text.slice(0, 1900) });
+  }, [voiceOn]);
+
+  const stopVoiceNow = useCallback(() => {
+    if (speakingTimerRef.current !== null) {
+      window.clearTimeout(speakingTimerRef.current);
+      speakingTimerRef.current = null;
+    }
+    vscode.postMessage({ type: "stopSpeaking" });
+    setSpeaking(false);
+  }, []);
+
+  const armSpeakingTimer = useCallback((seconds: number) => {
+    if (speakingTimerRef.current !== null) {
+      window.clearTimeout(speakingTimerRef.current);
+    }
+    speakingTimerRef.current = window.setTimeout(() => {
+      setSpeaking(false);
+    }, seconds * 1000 + 2000);
   }, []);
 
   const stopRecording = useCallback(() => {
@@ -285,6 +317,19 @@ export function App() {
               `${message.processingSeconds.toFixed(1)}s · ` +
               (asked > 0 ? `${asked} clarification question(s)` : "no open questions"),
           );
+          // Read the questions aloud when voice is enabled — the user answers
+          // by ear, though the text also stays visible below.
+          if (asked > 0) {
+            const questions = message.requirement.clarifications
+              .filter((item) => !item.answer)
+              .map((item, i) => `Question ${i + 1}. ${item.question}`)
+              .join(" ");
+            const speech =
+              asked === 1
+                ? `Before I write any code, one question. ${questions}`
+                : `Before I write any code, ${asked} questions. ${questions}`;
+            speakText(speech);
+          }
           break;
         }
         case "hostError": {
@@ -300,6 +345,7 @@ export function App() {
           setGenerationError(message.message);
           setContextError(message.message);
           setRecorderError((prevRecorderError) => message.message);
+          setSpeaking(false);
           pushHistory(`Error: ${message.message}`);
           break;
         }
@@ -326,6 +372,10 @@ export function App() {
           setGenerating(false);
           setGenerationError(null);
           setGenerationResult(message.result);
+          // The spoken variant says just the summary; never read diffs aloud.
+          if (message.result.summary) {
+            speakText(message.result.summary);
+          }
           pushHistory(
             `Code generated: ${message.result.diffs.length} file(s) · ${message.result.model} · ${message.result.processingSeconds.toFixed(1)}s` +
               (message.result.validated ? " ✓ validated" : " ⚠ validation issues") +
@@ -375,6 +425,13 @@ export function App() {
           setRunningTests(false);
           setTestRunResult(message.result);
           pushHistory(`Tests: ${message.result.summary}`);
+          if (message.result.total > 0) {
+            speakText(
+              message.result.success
+                ? `All good. ${message.result.summary}`
+                : `Tests did not pass. ${message.result.summary}`,
+            );
+          }
           break;
         }
         case "llmConfigResult": {
@@ -407,6 +464,19 @@ export function App() {
           });
           break;
         }
+        case "speakingStarted": {
+          setSpeaking(true);
+          armSpeakingTimer(message.estimatedSeconds);
+          break;
+        }
+        case "speakingStopped": {
+          setSpeaking(false);
+          if (speakingTimerRef.current !== null) {
+            window.clearTimeout(speakingTimerRef.current);
+            speakingTimerRef.current = null;
+          }
+          break;
+        }
         case "sessionState": {
           setActiveSession(message.session);
           setSessionList(message.sessions);
@@ -422,7 +492,7 @@ export function App() {
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [pushHistory]);
+  }, [pushHistory, speakText, armSpeakingTimer]);
 
   // Ask the host to check backend health once on mount, and load current LLM config.
   useEffect(() => {
@@ -737,6 +807,18 @@ export function App() {
           <span>{statusDetail}</span>
         </div>
         <button
+          className={`settings-gear-btn ${voiceOn ? "" : "muted"}`}
+          onClick={() => {
+            if (voiceOn && speaking) {
+              stopVoiceNow();
+            }
+            setVoiceOn((prev) => !prev);
+          }}
+          title={voiceOn ? "Mute spoken responses" : "Enable spoken responses"}
+        >
+          {voiceOn ? "🔈" : "🔇"}
+        </button>
+        <button
           className={`settings-gear-btn ${showSettings ? "active" : ""}`}
           style={{ marginLeft: "auto" }}
           onClick={() => {
@@ -936,6 +1018,15 @@ export function App() {
           ＋ New
         </button>
       </section>
+
+      {speaking && (
+        <section className="speaking-bar">
+          <span>🔊 Speaking…</span>
+          <button className="button secondary" onClick={stopVoiceNow} title="Stop the audio immediately">
+            ■ Stop voice
+          </button>
+        </section>
+      )}
 
       {viewTab === "chat" ? (
         <>
