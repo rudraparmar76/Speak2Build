@@ -256,7 +256,7 @@ export class BackendClient {
 
   /** Get relevant snippets from selected files for a requirement. */
   async getRelevantContext(
-    requirementText: string,
+    requirementText: string = "",
     filePaths: string[],
     workspaceRoot: string,
   ): Promise<RelevantResponse> {

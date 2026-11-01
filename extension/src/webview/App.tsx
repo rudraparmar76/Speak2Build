@@ -358,6 +358,13 @@ export function App() {
     setContextError(null);
   }, []);
 
+  // Auto-scan workspace when backend is online and scan has not run yet.
+  useEffect(() => {
+    if (status === "online" && !scanResult && !scanning) {
+      scanWorkspace();
+    }
+  }, [status, scanResult, scanning, scanWorkspace]);
+
   const toggleFileSelection = useCallback((path: string) => {
     setSelectedFiles((current) => {
       const next = new Set(current);
@@ -380,27 +387,27 @@ export function App() {
   }, []);
 
   const fetchRelevantContext = useCallback(() => {
-    if (transcript === null || transcript.text.trim().length < 3) return;
     if (selectedFiles.size === 0) return;
     setFetchingRelevant(true);
     setContextError(null);
+    const reqText = requirement?.task ?? transcript?.text ?? "";
     vscode.postMessage({
       type: "getRelevantContext",
-      requirementText: transcript.text,
+      requirementText: reqText,
       filePaths: Array.from(selectedFiles),
     });
-  }, [transcript, selectedFiles]);
+  }, [requirement, transcript, selectedFiles]);
 
   const generateCode = useCallback(() => {
-    if (transcript === null || transcript.text.trim().length < 3) return;
     if (!requirement) return;
-    if (!relevantResult || relevantResult.snippets.length === 0) return;
+    const reqText = transcript?.text ?? requirement.task;
+    if (reqText.trim().length < 3) return;
     setGenerating(true);
     setGenerationError(null);
     vscode.postMessage({
       type: "generateCode",
-      requirementText: transcript.text,
-      contextSnippets: relevantResult.snippets,
+      requirementText: reqText,
+      contextSnippets: relevantResult?.snippets ?? [],
       options: { include_tests: true },
     });
   }, [transcript, requirement, relevantResult]);
@@ -518,6 +525,90 @@ export function App() {
         </div>
       </section>
 
+      {/* 1. Project Context (Context-First Workflow) */}
+      <section className="card">
+        <div className="label">Project Context</div>
+        {!scanResult ? (
+          <div>
+            <p className="hint">
+              Select workspace files to provide code context before or after speaking.
+            </p>
+            <button
+              className="button"
+              onClick={scanWorkspace}
+              disabled={status !== "online" || scanning}
+            >
+              {scanning ? "Scanning…" : "🔍 Scan workspace"}
+            </button>
+            {contextError && <p className="error-text">{contextError}</p>}
+          </div>
+        ) : (
+          <div>
+            <p className="hint">
+              Detected: {scanResult.languages.join(", ") || "none"} · {scanResult.scannedFiles} files
+            </p>
+            <button
+              className="button"
+              onClick={scanWorkspace}
+              disabled={status !== "online" || scanning}
+            >
+              {scanning ? "Scanning…" : "🔍 Re-scan workspace"}
+            </button>
+            {contextError && <p className="error-text">{contextError}</p>}
+
+            <div className="file-tree">
+              {renderFileTree(scanResult.fileTree)}
+            </div>
+
+            <div className="file-selection-summary">
+              {selectedFiles.size > 0 && (
+                <>
+                  <p className="hint">{selectedFiles.size} file(s) selected</p>
+                  <button
+                    className="button"
+                    onClick={fetchRelevantContext}
+                    disabled={status !== "online" || fetchingRelevant}
+                  >
+                    {fetchingRelevant ? "Fetching snippets…" : "📥 Get relevant context"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {renderSnippets()}
+
+            {relevantResult && relevantResult.snippets.length > 0 && (
+              <div
+                className="context-ready-badge"
+                style={{
+                  marginTop: "8px",
+                  padding: "6px 10px",
+                  background: "rgba(34, 197, 94, 0.15)",
+                  border: "1px solid rgba(34, 197, 94, 0.4)",
+                  borderRadius: "4px",
+                }}
+              >
+                <span style={{ color: "#4ade80", fontWeight: 600, fontSize: "12px" }}>
+                  ✓ Context loaded ({relevantResult.snippets.length} snippet{relevantResult.snippets.length === 1 ? "" : "s"} ready for voice instructions)
+                </span>
+              </div>
+            )}
+
+            {relevantResult && relevantResult.snippets.length > 0 && requirement && (
+              <button
+                className="button"
+                style={{ marginTop: "8px" }}
+                onClick={() => extractRequirements(extractAnswers)}
+                disabled={status !== "online" || extracting}
+              >
+                {extracting ? "Updating requirements…" : "🔄 Re-extract requirements with selected context"}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* 2. Voice Capture */}
       <RecorderCard
         state={recorderState}
         elapsedMs={elapsedMs}
@@ -527,6 +618,7 @@ export function App() {
         onCancel={cancelRecording}
       />
 
+      {/* 3. Last Recording */}
       {lastUpload && (
         <section className="card">
           <div className="label">Last recording received by backend</div>
@@ -548,6 +640,7 @@ export function App() {
         </section>
       )}
 
+      {/* 4. Transcript */}
       {transcript && (
         <section className="card">
           <div className="label">Transcript (editable)</div>
@@ -579,7 +672,9 @@ export function App() {
           )}
           <p className="hint">
             {transcript.durationSeconds.toFixed(1)}s of audio processed in {transcript.processingSeconds.toFixed(1)}s.
-            Fix any misrecognized terms above — your edits feed the next milestone.
+            {relevantResult && relevantResult.snippets.length > 0
+              ? ` Loaded context (${relevantResult.snippets.length} snippets) will guide requirement extraction.`
+              : " Fix any misrecognized terms above."}
           </p>
           <button
             className="button"
@@ -592,6 +687,7 @@ export function App() {
         </section>
       )}
 
+      {/* 5. Requirements */}
       {requirement && (
         <section className="card">
           <div className="label">Requirements</div>
@@ -667,202 +763,140 @@ export function App() {
         </section>
       )}
 
-      {/* Scan workspace button — visible when we have a transcript but no scan yet */}
-      {!scanResult && transcript && status === "online" && (
+      {/* 6. Code Generation */}
+      {requirement && (
         <section className="card">
-          <div className="label">Project Context</div>
-          <p className="hint">Scan your workspace to provide code context for code generation.</p>
-          <button
-            className="button"
-            onClick={scanWorkspace}
-            disabled={scanning}
-          >
-            {scanning ? "Scanning…" : "🔍 Scan workspace"}
-          </button>
-          {contextError && <p className="error-text">{contextError}</p>}
-        </section>
-      )}
-
-      {scanResult && (
-        <section className="card">
-          <div className="label">Project Context</div>
+          <div className="label">Code Generation</div>
           <p className="hint">
-            Detected: {scanResult.languages.join(", ") || "none"} · {scanResult.scannedFiles} files
+            {relevantResult && relevantResult.snippets.length > 0
+              ? `Generate code from requirements + ${relevantResult.snippets.length} context snippet(s).`
+              : "Generate code from requirements (select files in Project Context above for best accuracy)."}
           </p>
           <button
             className="button"
-            onClick={scanWorkspace}
-            disabled={status !== "online" || scanning}
+            onClick={generateCode}
+            disabled={status !== "online" || generating}
           >
-            {scanning ? "Scanning…" : "🔍 Re-scan workspace"}
+            {generating ? "Generating code…" : "⚡ Generate code"}
           </button>
-          {contextError && <p className="error-text">{contextError}</p>}
+          {generationError && <p className="error-text">{generationError}</p>}
+        </section>
+      )}
 
-          <div className="file-tree">
-            {renderFileTree(scanResult.fileTree)}
+      {/* 7. Generated Diffs & Test Validation */}
+      {generationResult && (
+        <section className="card">
+          <div className="label">
+            Generated Diffs ({generationResult.diffs.length})
           </div>
-
-          <div className="file-selection-summary">
-            {selectedFiles.size > 0 && (
-              <>
-                <p className="hint">{selectedFiles.size} file(s) selected</p>
-                <button
-                  className="button"
-                  onClick={fetchRelevantContext}
-                  disabled={status !== "online" || fetchingRelevant || transcript === null}
-                >
-                  {fetchingRelevant ? "Fetching snippets…" : "📥 Get relevant context"}
-                </button>
-              </>
-            )}
-          </div>
-
-          {renderSnippets()}
-
-          {relevantResult && relevantResult.snippets.length > 0 && requirement && (
-            <button
-              className="button"
-              style={{ marginTop: "8px" }}
-              onClick={() => extractRequirements(extractAnswers)}
-              disabled={status !== "online" || extracting}
-            >
-              {extracting ? "Updating requirements…" : "🔄 Update requirements using selected context"}
-            </button>
+          {generationResult.summary && (
+            <p className="hint">{generationResult.summary}</p>
           )}
-
-          {requirement && relevantResult && relevantResult.snippets.length > 0 && (
-            <section className="card">
-              <div className="label">Code Generation</div>
-              <p className="hint">
-                Generate code from requirements + {relevantResult.snippets.length} context snippet(s).
-              </p>
-              <button
-                className="button"
-                onClick={generateCode}
-                disabled={status !== "online" || generating}
-              >
-                {generating ? "Generating code…" : "⚡ Generate code"}
-              </button>
-              {generationError && <p className="error-text">{generationError}</p>}
-            </section>
+          <p className="hint">
+            {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
+            {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
+            {generationResult.testsPassed && " ✓ tests passed"}
+            {generationResult.testErrors && generationResult.testErrors.length > 0 && !generationResult.testsPassed && " ⚠ test failures"}
+          </p>
+          {generationResult.validationErrors.length > 0 && (
+            <div className="validation-errors">
+              <strong>Validation warnings:</strong>
+              <ul>
+                {generationResult.validationErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </div>
           )}
-
-          {generationResult && (
-            <section className="card">
-              <div className="label">
-                Generated Diffs ({generationResult.diffs.length})
-              </div>
-              {generationResult.summary && (
-                <p className="hint">{generationResult.summary}</p>
-              )}
-              <p className="hint">
-                {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
-                {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
-                {generationResult.testsPassed && " ✓ tests passed"}
-                {generationResult.testErrors && generationResult.testErrors.length > 0 && !generationResult.testsPassed && " ⚠ test failures"}
-              </p>
-              {generationResult.validationErrors.length > 0 && (
-                <div className="validation-errors">
-                  <strong>Validation warnings:</strong>
-                  <ul>
-                    {generationResult.validationErrors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {generationResult.testErrors && generationResult.testErrors.length > 0 && (
-                <div className="validation-errors">
-                  <strong>Test failures:</strong>
-                  <ul>
-                    {generationResult.testErrors.map((err, i) => (
-                      <li key={i}><pre style={{whiteSpace: 'pre-wrap', fontSize: '10px', margin: 0}}>{err}</pre></li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {generationResult.diffs
-                .filter((d: FileDiff) => !dismissedDiffs.has(d.unifiedDiff))
-                .map((diff: FileDiff, index: number) => {
-                  const isApplying = applyingDiff === diff.unifiedDiff;
-                  const isReverting = revertingDiff === diff.unifiedDiff;
-                  const isApplied = appliedDiffs.has(diff.unifiedDiff);
-                  const hasError = applyError?.diff === diff.unifiedDiff;
-                  return (
-                    <div key={index} className="diff-card">
-                      <div className="diff-header">
-                        <span className="diff-path">{diff.path}</span>
-                        <span className="hint">({diff.language})</span>
-                        {diff.isNewFile && <span className="badge new-file">New file</span>}
-                        {isApplied && <span className="badge applied">✓ Applied</span>}
-                      </div>
-                      <pre className="diff-content">{diff.unifiedDiff}</pre>
-                      <div className="diff-actions">
+          {generationResult.testErrors && generationResult.testErrors.length > 0 && (
+            <div className="validation-errors">
+              <strong>Test failures:</strong>
+              <ul>
+                {generationResult.testErrors.map((err, i) => (
+                  <li key={i}><pre style={{whiteSpace: 'pre-wrap', fontSize: '10px', margin: 0}}>{err}</pre></li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {generationResult.diffs
+            .filter((d: FileDiff) => !dismissedDiffs.has(d.unifiedDiff))
+            .map((diff: FileDiff, index: number) => {
+              const isApplying = applyingDiff === diff.unifiedDiff;
+              const isReverting = revertingDiff === diff.unifiedDiff;
+              const isApplied = appliedDiffs.has(diff.unifiedDiff);
+              const hasError = applyError?.diff === diff.unifiedDiff;
+              return (
+                <div key={index} className="diff-card">
+                  <div className="diff-header">
+                    <span className="diff-path">{diff.path}</span>
+                    <span className="hint">({diff.language})</span>
+                    {diff.isNewFile && <span className="badge new-file">New file</span>}
+                    {isApplied && <span className="badge applied">✓ Applied</span>}
+                  </div>
+                  <pre className="diff-content">{diff.unifiedDiff}</pre>
+                  <div className="diff-actions">
+                    <button
+                      className="button secondary"
+                      onClick={() => openDiffInEditor(diff.path, diff.unifiedDiff, diff.isNewFile)}
+                      title="Open side-by-side diff in VS Code editor"
+                    >
+                      🔍 View in Editor
+                    </button>
+                    {!isApplied ? (
+                      <>
+                        <button
+                          className="button"
+                          onClick={() => applyDiff(diff.unifiedDiff)}
+                          disabled={status !== "online" || isApplying}
+                        >
+                          {isApplying ? "Applying…" : "✓ Apply"}
+                        </button>
                         <button
                           className="button secondary"
-                          onClick={() => openDiffInEditor(diff.path, diff.unifiedDiff, diff.isNewFile)}
-                          title="Open side-by-side diff in VS Code editor"
+                          onClick={() => dismissDiff(diff.unifiedDiff)}
+                          title="Reject and dismiss this diff"
                         >
-                          🔍 View in Editor
+                          ✕ Reject
                         </button>
-                        {!isApplied ? (
-                          <>
-                            <button
-                              className="button"
-                              onClick={() => applyDiff(diff.unifiedDiff)}
-                              disabled={status !== "online" || isApplying}
-                            >
-                              {isApplying ? "Applying…" : "✓ Apply"}
-                            </button>
-                            <button
-                              className="button secondary"
-                              onClick={() => dismissDiff(diff.unifiedDiff)}
-                              title="Reject and dismiss this diff"
-                            >
-                              ✕ Reject
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className="button danger"
-                            onClick={() => revertDiff(diff.unifiedDiff)}
-                            disabled={status !== "online" || isReverting}
-                          >
-                            {isReverting ? "Reverting…" : "⎌ Revert"}
-                          </button>
-                        )}
-                      </div>
-                      {hasError && <p className="error-text">{applyError.message}</p>}
-                    </div>
-                  );
-                })}
-
-              <div className="test-validation-section">
-                <div className="sub-label">Workspace Test Validation</div>
-                <button
-                  className="button secondary"
-                  onClick={runWorkspaceTests}
-                  disabled={status !== "online" || runningTests}
-                >
-                  {runningTests ? "Running tests…" : "🧪 Run Workspace Tests (pytest)"}
-                </button>
-                {testRunResult && (
-                  <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
-                    <p style={{ margin: "0 0 4px 0" }}>
-                      <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
-                    </p>
-                    {testRunResult.output && (
-                      <details style={{ marginTop: "4px" }}>
-                        <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>
-                        <pre className="test-output-log">{testRunResult.output}</pre>
-                      </details>
+                      </>
+                    ) : (
+                      <button
+                        className="button danger"
+                        onClick={() => revertDiff(diff.unifiedDiff)}
+                        disabled={status !== "online" || isReverting}
+                      >
+                        {isReverting ? "Reverting…" : "⎌ Revert"}
+                      </button>
                     )}
                   </div>
+                  {hasError && <p className="error-text">{applyError.message}</p>}
+                </div>
+              );
+            })}
+
+          <div className="test-validation-section">
+            <div className="sub-label">Workspace Test Validation</div>
+            <button
+              className="button secondary"
+              onClick={runWorkspaceTests}
+              disabled={status !== "online" || runningTests}
+            >
+              {runningTests ? "Running tests…" : "🧪 Run Workspace Tests (pytest)"}
+            </button>
+            {testRunResult && (
+              <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
+                <p style={{ margin: "0 0 4px 0" }}>
+                  <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
+                </p>
+                {testRunResult.output && (
+                  <details style={{ marginTop: "4px" }}>
+                    <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>
+                    <pre className="test-output-log">{testRunResult.output}</pre>
+                  </details>
                 )}
               </div>
-            </section>
-          )}
-
+            )}
+          </div>
         </section>
       )}
 

@@ -23,7 +23,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 3 | LLM requirement extraction, ambiguity detection, clarifications | ✅ Done |
 | 4 | Project context scanning, relevance scoring, bounded snippets | ✅ Done |
 | 5 | Code generation (unified diff patches with validation) | ✅ Done |
-| 6 | Diff review, approve/reject, patch apply, validation | Planned |
+| 6 | Diff review, approve/reject, patch apply, validation | ✅ Done |
 | 7 | Evaluation suite (20 tasks) + metrics + demo | Planned |
 
 See `DEVELOPMENT_LOG.md` for details and `ARCHITECTURE.md` for design.

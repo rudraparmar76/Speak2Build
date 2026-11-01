@@ -40,7 +40,7 @@ class Snippet(BaseModel):
 
 
 class RelevantRequest(BaseModel):
-    requirement_text: str = Field(min_length=1, max_length=8000)
+    requirement_text: str = Field(default="", max_length=8000)
     file_paths: list[str] = Field(min_length=1, max_length=50)
     workspace_root: str = Field(min_length=1)
     max_snippet_lines: int = 200

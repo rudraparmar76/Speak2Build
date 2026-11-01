@@ -26,7 +26,7 @@ export type WebviewToHost =
   /** Scan workspace for project context. */
   | { type: "scanContext"; workspaceRoot: string }
   /** Request relevant snippets from user-selected files. */
-  | { type: "getRelevantContext"; requirementText: string; filePaths: string[] }
+  | { type: "getRelevantContext"; requirementText?: string; filePaths: string[] }
   /** Generate code diffs from requirement + context. */
   | { type: "generateCode"; requirementText: string; contextSnippets: Snippet[]; options?: Record<string, unknown> }
   /** Apply a unified diff to the workspace. */

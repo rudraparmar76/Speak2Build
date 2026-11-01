@@ -205,3 +205,25 @@ def test_select_relevant_files_rejects_outside_workspace():
     finally:
         import shutil
         shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_select_relevant_files_empty_requirement():
+    """Verify context-first workflow where files are selected before speaking/transcribing."""
+    ws = _make_temp_workspace({
+        "src/main.py": "from flask import Flask\napp = Flask(__name__)\n",
+        "tests/test_main.py": "def test_root():\n    assert True\n",
+    })
+    try:
+        snippets, truncated = ctx.select_relevant_files(
+            requirement_text="",
+            file_paths=["src/main.py", "tests/test_main.py"],
+            workspace_root=ws,
+        )
+        assert len(snippets) == 2
+        paths = [s["path"] for s in snippets]
+        assert "src/main.py" in paths
+        assert "tests/test_main.py" in paths
+        assert not truncated
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)

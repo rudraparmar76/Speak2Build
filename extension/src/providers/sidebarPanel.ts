@@ -177,7 +177,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           }
           const workspaceRoot = folders[0].uri.fsPath;
           const result = await client.getRelevantContext(
-            message.requirementText,
+            message.requirementText ?? "",
             message.filePaths,
             workspaceRoot,
           );
