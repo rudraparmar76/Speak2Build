@@ -101,12 +101,26 @@ interface GenerationApiResponse {
   processing_seconds: number;
   validated: boolean;
   validation_errors: string[];
+  test_errors: string[];
+  tests_passed: boolean;
 }
 
 interface ApplyDiffResponse {
   success: boolean;
   message: string;
   affected_files: string[];
+}
+
+export interface TestRunApiResponse {
+  success: boolean;
+  passed: number;
+  failed: number;
+  errors: number;
+  skipped: number;
+  total: number;
+  duration_seconds: number;
+  summary: string;
+  output: string;
 }
 
 interface GenerationOptions {
@@ -294,6 +308,40 @@ export class BackendClient {
         body: JSON.stringify({ unified_diff: unifiedDiff, workspace_root: workspaceRoot }),
       },
       APPLY_DIFF_TIMEOUT_MS,
+    );
+  }
+
+  /** Revert an applied unified diff in the workspace. */
+  async revertDiff(unifiedDiff: string, workspaceRoot: string): Promise<ApplyDiffResponse> {
+    return await this.request<ApplyDiffResponse>(
+      "POST",
+      "/api/diff/revert",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unified_diff: unifiedDiff, workspace_root: workspaceRoot }),
+      },
+      APPLY_DIFF_TIMEOUT_MS,
+    );
+  }
+
+  /** Run workspace pytest tests. */
+  async runTests(
+    workspaceRoot: string,
+    testPath?: string,
+    timeoutSeconds: number = 30,
+  ): Promise<TestRunApiResponse> {
+    return await this.request<TestRunApiResponse>(
+      "POST",
+      "/api/validate/tests",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace_root: workspaceRoot,
+          test_path: testPath || undefined,
+          timeout_seconds: timeoutSeconds,
+        }),
+      },
+      (timeoutSeconds + 5) * 1000,
     );
   }
 

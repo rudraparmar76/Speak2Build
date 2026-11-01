@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -68,6 +69,8 @@ class GenerationOutcome:
     processing_seconds: float
     validated: bool
     validation_errors: list[str]
+    test_errors: list[str] = None  # Test failures from pytest
+    tests_passed: bool = False     # Whether tests passed (if run)
 
 
 class CodeGenerationError(Exception):
@@ -348,6 +351,111 @@ def validate_typescript_syntax(content: str, file_path: str, workspace_root: Pat
             pass
 
 
+def run_pytest_on_files(
+    generated_files: list[_GeneratedFile],
+    workspace_root: Path,
+    options: dict,
+) -> list[str]:
+    """Run pytest on the generated code to verify it works.
+
+    Writes generated files to a temporary directory, runs pytest,
+    and returns any test failures as validation errors.
+    """
+    if not options.get("include_tests", True):
+        return []
+
+    workspace_root = _safe_directory(workspace_root)
+
+    # Locate Python executable: check workspace virtualenvs first, then current runtime
+    python_bin = sys.executable
+    for venv_path in [
+        workspace_root / ".venv" / "Scripts" / "python.exe",
+        workspace_root / ".venv" / "bin" / "python",
+        workspace_root / "venv" / "Scripts" / "python.exe",
+        workspace_root / "venv" / "bin" / "python",
+    ]:
+        if venv_path.is_file():
+            python_bin = str(venv_path)
+            break
+
+    # Check if pytest is available
+    try:
+        subprocess.run(
+            [python_bin, "-m", "pytest", "--version"],
+            capture_output=True, timeout=5
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ["pytest not available in environment"]
+
+    # Create a temporary workspace with the generated files
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+
+        # Copy existing project files (for imports to work)
+        # Only copy Python files to keep it fast
+        for py_file in workspace_root.rglob("*.py"):
+            try:
+                rel = py_file.relative_to(workspace_root)
+                # Skip test files, cache, and generated files
+                if any(part.startswith(".") for part in rel.parts):
+                    continue
+                if rel.parts[0] in ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"):
+                    continue
+                dst = tmp_path / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_text(read_file_safe(py_file), encoding="utf-8")
+            except (OSError, ValueError):
+                continue
+
+        # Write generated files
+        for gf in generated_files:
+            if gf.language != "python":
+                continue
+            dst = tmp_path / gf.path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(gf.content, encoding="utf-8")
+
+        # Run pytest on test files only
+        test_files = [str(tmp_path / gf.path) for gf in generated_files
+                      if gf.language == "python" and "test" in gf.path]
+
+        if not test_files:
+            # No test files generated, look for existing test files that might be affected
+            test_files = list(tmp_path.rglob("test_*.py")) + list(tmp_path.rglob("*_test.py"))
+            test_files = [str(f) for f in test_files[:5]]  # Limit to first 5
+
+        if not test_files:
+            return []  # No tests to run
+
+        try:
+            # Run pytest with short timeout
+            result = subprocess.run(
+                [python_bin, "-m", "pytest", "-x", "-q", "--tb=short"] + test_files,
+                capture_output=True, text=True, timeout=30, cwd=tmp_path
+            )
+            if result.returncode != 0:
+                output = result.stdout + "\n" + result.stderr
+                # Check for missing third-party modules (environment issue, not a generation defect)
+                if "ModuleNotFoundError: No module named" in output:
+                    m = re.search(r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]", output)
+                    pkg = m.group(1) if m else "dependency"
+                    return [f"Test run skipped: '{pkg}' is not installed in the Python environment."]
+
+                # Extract relevant failure lines
+                failure_lines = []
+                for line in output.splitlines():
+                    if any(keyword in line.lower() for keyword in ["failed", "error", "assert", "traceback", "test_"]):
+                        failure_lines.append(line)
+                if failure_lines:
+                    return ["Test failures:\n" + "\n".join(failure_lines[:20])]
+                return [f"Tests failed (exit code {result.returncode}):\n{output[:2000]}"]
+            return []
+        except subprocess.TimeoutExpired:
+            return ["pytest timed out after 30 seconds"]
+        except Exception as e:
+            return [f"pytest execution error: {e}"]
+
+
 def ensure_diff_headers(diff_text: str, file_path: str, is_new_file: bool) -> str:
     """Ensure the unified diff has proper --- / +++ headers for git apply.
 
@@ -444,6 +552,75 @@ def apply_diff(diff: str, workspace_root: Path) -> tuple[bool, str, list[str]]:
         return True, "Applied successfully (direct write)", affected
     except Exception as e:
         return False, f"Fallback apply failed: {e}", []
+
+
+def invert_unified_diff(diff: str) -> str:
+    """Invert a unified diff so applying it reverses the changes."""
+    lines = diff.splitlines()
+    inverted_lines = []
+    for line in lines:
+        if line.startswith("--- ") or line.startswith("+++ "):
+            inverted_lines.append(line)
+        elif line.startswith("@@"):
+            m = re.match(r"^@@\s*-(\d+(?:,\d+)?)\s*\+(\d+(?:,\d+)?)\s*@@(.*)$", line)
+            if m:
+                inverted_lines.append(f"@@ -{m.group(2)} +{m.group(1)} @@{m.group(3)}")
+            else:
+                inverted_lines.append(line)
+        elif line.startswith("+"):
+            inverted_lines.append("-" + line[1:])
+        elif line.startswith("-"):
+            inverted_lines.append("+" + line[1:])
+        else:
+            inverted_lines.append(line)
+    return "\n".join(inverted_lines) + ("\n" if diff.endswith("\n") else "")
+
+
+def revert_diff(diff: str, workspace_root: Path) -> tuple[bool, str, list[str]]:
+    """Revert an applied unified diff using git apply --reverse, falling back to direct write."""
+    workspace_root = _safe_directory(workspace_root)
+    affected = re.findall(r"^\+\+\+\s+b/(.+)$", diff, re.MULTILINE)
+
+    # Try git apply --reverse first
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".patch", delete=False, newline="\n", encoding="utf-8"
+    ) as f:
+        f.write(diff)
+        if not diff.endswith("\n"):
+            f.write("\n")
+        patch_path = f.name
+    try:
+        result = subprocess.run(
+            ["git", "apply", "--reverse", "--whitespace=nowarn", patch_path],
+            capture_output=True, text=True, timeout=10, cwd=workspace_root
+        )
+        if result.returncode == 0:
+            return True, "Reverted successfully", affected
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    finally:
+        try:
+            os.unlink(patch_path)
+        except OSError:
+            pass
+
+    # Fallback: in-memory reversal and direct write/unlink
+    try:
+        is_new = "--- /dev/null" in diff
+        for file_path in affected:
+            full_path = workspace_root / file_path
+            if is_new:
+                if full_path.exists():
+                    full_path.unlink()
+            else:
+                if full_path.exists():
+                    current_content = read_file_safe(full_path)
+                    inverted = invert_unified_diff(diff)
+                    reverted_content = _apply_diff_in_memory(current_content, inverted)
+                    full_path.write_text(reverted_content, encoding="utf-8")
+        return True, "Reverted successfully (direct write)", affected
+    except Exception as e:
+        return False, f"Fallback revert failed: {e}", []
 
 
 def validate_file_content(
@@ -647,15 +824,30 @@ Return ONLY the JSON object with files and summary. Do NOT use markdown fences.
                     all_errors.append("No file changes produced")
 
                 if not all_errors:
-                    return GenerationOutcome(
-                        diffs=diffs,
-                        summary=summary,
-                        model=self._model_name,
-                        processing_seconds=time.monotonic() - started,
-                        validated=True,
-                        validation_errors=[],
-                    )
-                feedback = "\n".join(all_errors)
+                    # Run pytest on generated files
+                    test_errors = run_pytest_on_files(generated_files, workspace_root, options)
+                    # Check if tests failed due to environment issues (missing package), which should not block generation
+                    is_env_error = any("not installed in the Python environment" in err or "pytest not available" in err for err in test_errors)
+                    if test_errors and not is_env_error and attempt < self._max_attempts:
+                        # Feed actual code/assertion failures back to the repair loop once
+                        feedback = "\n".join(test_errors)
+                        continue
+                    else:
+                        # Diffs are syntactically valid and cleanly applicable.
+                        # Return GenerationOutcome with test_errors reported to the developer.
+                        return GenerationOutcome(
+                            diffs=diffs,
+                            summary=summary,
+                            model=self._model_name,
+                            processing_seconds=time.monotonic() - started,
+                            validated=True,
+                            validation_errors=[],
+                            test_errors=test_errors,
+                            tests_passed=len(test_errors) == 0,
+                        )
+
+                if all_errors:
+                    feedback = "\n".join(all_errors)
             except (json.JSONDecodeError, ValueError, Exception) as e:
                 feedback = str(e)
 

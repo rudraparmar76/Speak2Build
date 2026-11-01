@@ -30,7 +30,13 @@ export type WebviewToHost =
   /** Generate code diffs from requirement + context. */
   | { type: "generateCode"; requirementText: string; contextSnippets: Snippet[]; options?: Record<string, unknown> }
   /** Apply a unified diff to the workspace. */
-  | { type: "applyDiff"; unifiedDiff: string; workspaceRoot: string };
+  | { type: "applyDiff"; unifiedDiff: string; workspaceRoot: string }
+  /** Revert an applied unified diff in the workspace. */
+  | { type: "revertDiff"; unifiedDiff: string; workspaceRoot: string }
+  /** Open proposed diff in VS Code native side-by-side diff editor. */
+  | { type: "openDiffInEditor"; filePath: string; unifiedDiff: string; isNewFile?: boolean }
+  /** Run pytest in the workspace and report results. */
+  | { type: "runWorkspaceTests"; testPath?: string };
 
 export type ClarificationInfo = {
   question: string;
@@ -93,6 +99,20 @@ export type GenerationResult = {
   processingSeconds: number;
   validated: boolean;
   validationErrors: string[];
+  testErrors: string[];
+  testsPassed: boolean;
+};
+
+export type TestRunResult = {
+  success: boolean;
+  passed: number;
+  failed: number;
+  errors: number;
+  skipped: number;
+  total: number;
+  durationSeconds: number;
+  summary: string;
+  output: string;
 };
 
 export type HostToWebview =
@@ -107,6 +127,8 @@ export type HostToWebview =
   | { type: "contextRelevant"; result: RelevantResult }
   | { type: "generationResult"; result: GenerationResult }
   | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[] }
+  | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[] }
+  | { type: "testRunResult"; result: TestRunResult }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

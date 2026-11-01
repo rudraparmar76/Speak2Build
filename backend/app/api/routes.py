@@ -25,6 +25,8 @@ from app.schemas.generation import (
     FileDiff,
     GenerateRequest,
     GenerateResponse,
+    RevertDiffRequest,
+    RevertDiffResponse,
 )
 from app.schemas.requirements import ExtractRequest, ExtractionResponse
 from app.schemas.transcription import (
@@ -32,12 +34,14 @@ from app.schemas.transcription import (
     TranscriptionResponse,
     TranscriptSegment,
 )
+from app.schemas.validation import TestRunRequest, TestRunResponse
 from app.services import audio_store
 from app.services import recorder as audio_recorder
 from app.services import requirements as requirements_service
 from app.services import transcription as transcription_service
 from app.services import project_context as context_service
 from app.services import code_generation as generation_service
+from app.services import validation as validation_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -309,6 +313,8 @@ def generate_code(payload: GenerateRequest) -> GenerateResponse:
         processing_seconds=outcome.processing_seconds,
         validated=outcome.validated,
         validation_errors=outcome.validation_errors,
+        test_errors=outcome.test_errors or [],
+        tests_passed=outcome.tests_passed,
     )
 
 
@@ -325,3 +331,47 @@ def apply_diff(payload: ApplyDiffRequest) -> ApplyDiffResponse:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Apply failed: {exc}") from exc
+
+
+@router.post("/api/diff/revert", response_model=RevertDiffResponse)
+def revert_diff(payload: RevertDiffRequest) -> RevertDiffResponse:
+    """Revert an applied unified diff in the workspace."""
+    try:
+        workspace_root = Path(payload.workspace_root).resolve()
+        if not workspace_root.exists():
+            raise HTTPException(status_code=400, detail="Workspace root does not exist")
+        success, message, affected = generation_service.revert_diff(payload.unified_diff, workspace_root)
+        return RevertDiffResponse(success=success, message=message, affected_files=affected)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Revert failed: {exc}") from exc
+
+
+@router.post("/api/validate/tests", response_model=TestRunResponse)
+def run_tests(payload: TestRunRequest) -> TestRunResponse:
+    """Run pytest in the workspace and report results."""
+    try:
+        workspace_root = Path(payload.workspace_root).resolve()
+        if not workspace_root.exists() or not workspace_root.is_dir():
+            raise HTTPException(status_code=400, detail="Workspace root directory does not exist")
+        outcome = validation_service.run_pytest(
+            workspace_root=workspace_root,
+            test_path=payload.test_path,
+            timeout_seconds=payload.timeout_seconds,
+        )
+        return TestRunResponse(
+            success=outcome.success,
+            passed=outcome.passed,
+            failed=outcome.failed,
+            errors=outcome.errors,
+            skipped=outcome.skipped,
+            total=outcome.total,
+            duration_seconds=outcome.duration_seconds,
+            summary=outcome.summary,
+            output=outcome.output,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Test validation failed: {exc}") from exc

@@ -299,3 +299,166 @@ def test_apply_diff_fallback_for_utf16(tmp_path):
     assert "src/main.py" in affected
     # The file should now be UTF-8 with the new content
     assert src_file.read_text(encoding="utf-8") == new_content
+
+
+def test_run_pytest_on_files_no_tests(tmp_path):
+    """run_pytest_on_files should return empty list when no test files generated."""
+    generated = [
+        cg._GeneratedFile(
+            path="src/foo.py",
+            language="python",
+            content="def foo():\n    return 42\n",
+            is_new_file=True,
+        )
+    ]
+    options = {"include_tests": True}
+    errors = cg.run_pytest_on_files(generated, tmp_path, options)
+    # No test files generated, but existing test files might be found
+    # In empty tmp_path, should return empty
+    assert errors == []
+
+
+def test_run_pytest_on_files_include_tests_false(tmp_path):
+    """run_pytest_on_files should skip when include_tests is False."""
+    generated = [
+        cg._GeneratedFile(
+            path="tests/test_foo.py",
+            language="python",
+            content="def test_foo():\n    assert True\n",
+            is_new_file=True,
+        )
+    ]
+    options = {"include_tests": False}
+    errors = cg.run_pytest_on_files(generated, tmp_path, options)
+    assert errors == []
+
+
+def test_run_pytest_on_files_with_passing_test(tmp_path):
+    """run_pytest_on_files should pass when generated tests pass."""
+    # Create a simple module
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "math_utils.py").write_text("def add(a, b):\n    return a + b\n")
+
+    generated = [
+        cg._GeneratedFile(
+            path="tests/test_math_utils.py",
+            language="python",
+            content="from src.math_utils import add\n\ndef test_add():\n    assert add(2, 3) == 5\n",
+            is_new_file=True,
+        )
+    ]
+    options = {"include_tests": True}
+    errors = cg.run_pytest_on_files(generated, tmp_path, options)
+    assert errors == []
+
+
+def test_run_pytest_on_files_with_failing_test(tmp_path):
+    """run_pytest_on_files should return errors when tests fail."""
+    generated = [
+        cg._GeneratedFile(
+            path="tests/test_fail.py",
+            language="python",
+            content="def test_fail():\n    assert False, 'intentional failure'\n",
+            is_new_file=True,
+        )
+    ]
+    options = {"include_tests": True}
+    errors = cg.run_pytest_on_files(generated, tmp_path, options)
+    assert len(errors) > 0
+    assert any("fail" in err.lower() or "assert" in err.lower() for err in errors)
+
+
+def test_run_pytest_on_files_missing_dependency(tmp_path):
+    """Missing third-party packages should be reported as skipped environment dependencies, not fatal failures."""
+    generated = [
+        cg._GeneratedFile(
+            path="tests/test_dep.py",
+            language="python",
+            content="import nonexistent_pkg_12345\ndef test_pkg(): pass\n",
+            is_new_file=True,
+        )
+    ]
+    options = {"include_tests": True}
+    errors = cg.run_pytest_on_files(generated, tmp_path, options)
+    assert len(errors) == 1
+    assert "not installed in the Python environment" in errors[0]
+    assert "nonexistent_pkg_12345" in errors[0]
+
+
+def test_invert_unified_diff():
+    diff = """--- a/src/main.py
++++ b/src/main.py
+@@ -1,2 +1,3 @@
+ def hello():
+-    return 1
++    return 2
++    # note
+"""
+    inverted = cg.invert_unified_diff(diff)
+    assert "--- a/src/main.py" in inverted
+    assert "+++ b/src/main.py" in inverted
+    assert "@@ -1,3 +1,2 @@" in inverted
+    assert "+    return 1" in inverted
+    assert "-    return 2" in inverted
+    assert "-    # note" in inverted
+
+
+def test_revert_modified_file(tmp_path):
+    f = tmp_path / "calc.py"
+    f.write_text("def val():\n    return 1\n", encoding="utf-8")
+
+    diff = """--- a/calc.py
++++ b/calc.py
+@@ -1,2 +1,2 @@
+ def val():
+-    return 1
++    return 100
+"""
+    cg.apply_diff(diff, tmp_path)
+    assert f.read_text(encoding="utf-8") == "def val():\n    return 100\n"
+
+    ok, msg, affected = cg.revert_diff(diff, tmp_path)
+    assert ok is True
+    assert "calc.py" in affected
+    assert f.read_text(encoding="utf-8") == "def val():\n    return 1\n"
+
+
+def test_revert_new_file(tmp_path):
+    new_f = tmp_path / "created.py"
+    diff = """--- /dev/null
++++ b/created.py
+@@ -0,0 +1,2 @@
++def brand_new():
++    pass
+"""
+    cg.apply_diff(diff, tmp_path)
+    assert new_f.exists()
+
+    ok, msg, affected = cg.revert_diff(diff, tmp_path)
+    assert ok is True
+    assert not new_f.exists()
+
+
+def test_api_diff_revert(tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+
+    f = tmp_path / "code.py"
+    f.write_text("orig = True\n", encoding="utf-8")
+
+    diff = """--- a/code.py
++++ b/code.py
+@@ -1 +1,2 @@
+ orig = True
++added = True
+"""
+    cg.apply_diff(diff, tmp_path)
+    assert "added = True" in f.read_text(encoding="utf-8")
+
+    res = client.post("/api/diff/revert", json={"unified_diff": diff, "workspace_root": str(tmp_path)})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert "code.py" in data["affected_files"]
+    assert "added = True" not in f.read_text(encoding="utf-8")

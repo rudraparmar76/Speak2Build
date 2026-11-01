@@ -28,6 +28,8 @@ class GenerateResponse(BaseModel):
     processing_seconds: float
     validated: bool = False
     validation_errors: list[str] = []
+    test_errors: list[str] = []
+    tests_passed: bool = False
 
 
 class ApplyDiffRequest(BaseModel):
@@ -37,6 +39,30 @@ class ApplyDiffRequest(BaseModel):
 
 
 class ApplyDiffResponse(BaseModel):
+    success: bool
+    message: str
+    affected_files: list[str] = []
+
+
+class RevertDiffRequest(BaseModel):
+    """Request to revert an applied unified diff."""
+    unified_diff: str = Field(min_length=1)
+    workspace_root: str = Field(min_length=1)
+
+
+class RevertDiffResponse(BaseModel):
+    success: bool
+    message: str
+    affected_files: list[str] = []
+
+
+class RevertDiffRequest(BaseModel):
+    """Request to revert an applied unified diff."""
+    unified_diff: str = Field(min_length=1)
+    workspace_root: str = Field(min_length=1)
+
+
+class RevertDiffResponse(BaseModel):
     success: bool
     message: str
     affected_files: list[str] = []

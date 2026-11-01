@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
 import type {
   WebviewToHost,
@@ -224,6 +227,8 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
               processingSeconds: result.processing_seconds,
               validated: result.validated,
               validationErrors: result.validation_errors,
+              testErrors: result.test_errors,
+              testsPassed: result.tests_passed,
             },
           });
           break;
@@ -244,6 +249,95 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             success: result.success,
             message: result.message,
             affectedFiles: result.affected_files,
+          });
+          break;
+        }
+        case "revertDiff": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          const result = await client.revertDiff(message.unifiedDiff, workspaceRoot);
+          this.post({
+            type: "diffReverted",
+            success: result.success,
+            message: result.message,
+            affectedFiles: result.affected_files,
+          });
+          break;
+        }
+        case "openDiffInEditor": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            return;
+          }
+          const workspaceRoot = folders[0].uri;
+          const targetUri = vscode.Uri.joinPath(workspaceRoot, message.filePath);
+
+          let originalContent = "";
+          let originalUri: vscode.Uri;
+
+          const tmpDir = os.tmpdir();
+          const baseName = path.basename(message.filePath);
+
+          if (message.isNewFile) {
+            const emptyPath = path.join(tmpDir, `speak2build_empty_${baseName}`);
+            fs.writeFileSync(emptyPath, "", "utf-8");
+            originalUri = vscode.Uri.file(emptyPath);
+          } else {
+            try {
+              const raw = await vscode.workspace.fs.readFile(targetUri);
+              originalContent = new TextDecoder().decode(raw);
+              originalUri = targetUri;
+            } catch {
+              const emptyPath = path.join(tmpDir, `speak2build_empty_${baseName}`);
+              fs.writeFileSync(emptyPath, "", "utf-8");
+              originalUri = vscode.Uri.file(emptyPath);
+            }
+          }
+
+          const proposedContent = computeProposedContent(originalContent, message.unifiedDiff, !!message.isNewFile);
+          const proposedPath = path.join(tmpDir, `speak2build_proposed_${baseName}`);
+          fs.writeFileSync(proposedPath, proposedContent, "utf-8");
+          const proposedUri = vscode.Uri.file(proposedPath);
+
+          await vscode.commands.executeCommand(
+            "vscode.diff",
+            originalUri,
+            proposedUri,
+            `${baseName} (Current ↔ Proposed)`,
+          );
+          break;
+        }
+        case "runWorkspaceTests": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          const result = await client.runTests(workspaceRoot, message.testPath);
+          this.post({
+            type: "testRunResult",
+            result: {
+              success: result.success,
+              passed: result.passed,
+              failed: result.failed,
+              errors: result.errors,
+              skipped: result.skipped,
+              total: result.total,
+              durationSeconds: result.duration_seconds,
+              summary: result.summary,
+              output: result.output,
+            },
           });
           break;
         }
@@ -300,4 +394,63 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
 </body>
 </html>`;
   }
+}
+
+function computeProposedContent(
+  originalContent: string,
+  unifiedDiff: string,
+  isNewFile: boolean,
+): string {
+  if (isNewFile) {
+    const lines = unifiedDiff.split(/\r?\n/);
+    const added: string[] = [];
+    let pastHeader = false;
+    for (const l of lines) {
+      if (!pastHeader) {
+        if (l.startsWith("@@")) {
+          pastHeader = true;
+        }
+        continue;
+      }
+      if (l.startsWith("+")) {
+        added.push(l.slice(1));
+      }
+    }
+    return added.join("\n") + "\n";
+  }
+
+  const oldLines = originalContent.split(/\r?\n/);
+  const newLines = [...oldLines];
+  const diffLines = unifiedDiff.split(/\r?\n/);
+
+  let i = 0;
+  while (i < diffLines.length) {
+    const line = diffLines[i];
+    if (line.startsWith("@@")) {
+      const match = line.match(/@@\s*-(\d+),?(\d*)\s*\+(\d+),?(\d*)\s*@@/);
+      if (!match) {
+        i++;
+        continue;
+      }
+      const oldStart = Math.max(0, parseInt(match[1], 10) - 1);
+      const oldCount = match[2] ? parseInt(match[2], 10) : 1;
+
+      i++;
+      const insertLines: string[] = [];
+      while (i < diffLines.length && !diffLines[i].startsWith("@@")) {
+        const hunkLine = diffLines[i];
+        if (hunkLine.startsWith("+")) {
+          insertLines.push(hunkLine.slice(1));
+        }
+        i++;
+      }
+
+      const count = Math.min(oldCount, Math.max(0, newLines.length - oldStart));
+      newLines.splice(oldStart, count, ...insertLines);
+    } else {
+      i++;
+    }
+  }
+
+  return newLines.join("\n");
 }

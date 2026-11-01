@@ -1,5 +1,32 @@
 # Speak2Build — Development Log
 
+## Milestone 6 — Review & Validation ✅
+
+**Goal:** developer-in-the-loop patch review (VS Code native side-by-side diff editor), approve/reject controls, patch reversal/rollback, and workspace test validation (`pytest`).
+
+### Completed
+
+- [x] `services/validation.py`: safe workspace `pytest` runner with virtualenv detection, process timeouts (default 30s), path traversal rejection, test count regex parsing (passed, failed, errors, skipped, duration), and output truncation.
+- [x] `schemas/validation.py`: `TestRunRequest` (workspace_root, test_path, timeout_seconds) and `TestRunResponse` (success, passed, failed, errors, skipped, total, duration_seconds, summary, output).
+- [x] `POST /api/validate/tests` — executes workspace pytest suite safely and returns structured test metrics.
+- [x] `services/code_generation.py`: added `invert_unified_diff` and `revert_diff` — rolls back applied changes via `git apply --reverse` with in-memory direct write/unlink fallback.
+- [x] `schemas/generation.py`: `RevertDiffRequest` and `RevertDiffResponse`.
+- [x] `POST /api/diff/revert` — endpoint for reverting applied unified diffs.
+- [x] Extension Native Diff Viewer: `openDiffInEditor` command that computes proposed content and invokes `vscode.diff` for a native side-by-side editor review.
+- [x] Sidebar Controls:
+  - **🔍 View in Editor** on each diff card (opens native side-by-side comparison).
+  - **✓ Apply** vs **✕ Reject** buttons before application (allows dismissing unwanted diffs).
+  - **⎌ Revert** button after application (calls reverse apply endpoint and resets state).
+  - **🧪 Run Workspace Tests (pytest)** card with live status badges (`✓ Passed` / `✗ Failed`), duration, and collapsible output log.
+- [x] 15 new tests (90 total green): pytest output parser (pass, fail, no tests), output truncator, test runner execution (passing test, failing test, traversal rejection, non-existent workspace), `invert_unified_diff`, `revert_diff` (modified file, new file deletion), and all API endpoints.
+
+### Verification Performed
+
+- `pytest backend/tests/`: **90 passed** in 9.03s.
+- `npm run build` + `npm run typecheck`: clean build, 0 TypeScript errors.
+
+---
+
 ## Milestone 5 — Code Generation ✅
 
 **Goal:** generate valid, project-aware unified diff patches from structured requirements + context snippets, with automated validation and repair loop.

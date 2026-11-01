@@ -12,6 +12,7 @@ import type {
   RequirementResult,
   ScanResult,
   Snippet,
+  TestRunResult,
 } from "../types/messages";
 
 const vscode = getVsCodeApi();
@@ -86,6 +87,11 @@ export function App() {
   const [appliedDiffs, setAppliedDiffs] = useState<Set<string>>(new Set());
   const [applyError, setApplyError] = useState<{ diff: string; message: string } | null>(null);
   const applyingDiffRef = useRef<string | null>(null);
+  const [revertingDiff, setRevertingDiff] = useState<string | null>(null);
+  const [dismissedDiffs, setDismissedDiffs] = useState<Set<string>>(new Set());
+  const [runningTests, setRunningTests] = useState(false);
+  const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
+  const revertingDiffRef = useRef<string | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -231,6 +237,8 @@ export function App() {
           pushHistory(
             `Code generated: ${message.result.diffs.length} file(s) · ${message.result.model} · ${message.result.processingSeconds.toFixed(1)}s` +
               (message.result.validated ? " ✓ validated" : " ⚠ validation issues") +
+              (message.result.testsPassed ? " ✓ tests passed" : "") +
+              (message.result.testErrors && message.result.testErrors.length > 0 ? " ⚠ test failures" : "") +
               (message.result.validationErrors.length > 0 ? `: ${message.result.validationErrors.join("; ")}` : ""),
           );
           break;
@@ -252,6 +260,29 @@ export function App() {
             );
             pushHistory(`Diff apply failed: ${message.message}`);
           }
+          break;
+        }
+        case "diffReverted": {
+          const target = revertingDiffRef.current;
+          setRevertingDiff(null);
+          if (message.success) {
+            if (target) {
+              setAppliedDiffs((prev) => {
+                const next = new Set(prev);
+                next.delete(target);
+                return next;
+              });
+            }
+            pushHistory(`Diff reverted: ${message.affectedFiles.join(", ")}`);
+          } else {
+            pushHistory(`Diff revert failed: ${message.message}`);
+          }
+          break;
+        }
+        case "testRunResult": {
+          setRunningTests(false);
+          setTestRunResult(message.result);
+          pushHistory(`Tests: ${message.result.summary}`);
           break;
         }
       }
@@ -383,6 +414,37 @@ export function App() {
       type: "applyDiff",
       unifiedDiff,
       workspaceRoot: "",
+    });
+  }, []);
+
+  const revertDiff = useCallback((unifiedDiff: string) => {
+    revertingDiffRef.current = unifiedDiff;
+    setRevertingDiff(unifiedDiff);
+    vscode.postMessage({
+      type: "revertDiff",
+      unifiedDiff,
+      workspaceRoot: "",
+    });
+  }, []);
+
+  const openDiffInEditor = useCallback((filePath: string, unifiedDiff: string, isNewFile: boolean) => {
+    vscode.postMessage({
+      type: "openDiffInEditor",
+      filePath,
+      unifiedDiff,
+      isNewFile,
+    });
+  }, []);
+
+  const dismissDiff = useCallback((unifiedDiff: string) => {
+    setDismissedDiffs((prev) => new Set(prev).add(unifiedDiff));
+    pushHistory("Diff rejected/dismissed");
+  }, [pushHistory]);
+
+  const runWorkspaceTests = useCallback(() => {
+    setRunningTests(true);
+    vscode.postMessage({
+      type: "runWorkspaceTests",
     });
   }, []);
 
@@ -696,6 +758,8 @@ export function App() {
               <p className="hint">
                 {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
                 {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
+                {generationResult.testsPassed && " ✓ tests passed"}
+                {generationResult.testErrors && generationResult.testErrors.length > 0 && !generationResult.testsPassed && " ⚠ test failures"}
               </p>
               {generationResult.validationErrors.length > 0 && (
                 <div className="validation-errors">
@@ -707,30 +771,95 @@ export function App() {
                   </ul>
                 </div>
               )}
-              {generationResult.diffs.map((diff: FileDiff, index: number) => {
-                const isApplying = applyingDiff === diff.unifiedDiff;
-                const isApplied = appliedDiffs.has(diff.unifiedDiff);
-                const hasError = applyError?.diff === diff.unifiedDiff;
-                return (
-                  <div key={index} className="diff-card">
-                    <div className="diff-header">
-                      <span className="diff-path">{diff.path}</span>
-                      <span className="hint">({diff.language})</span>
-                      {diff.isNewFile && <span className="badge new-file">New file</span>}
-                      {isApplied && <span className="badge applied">✓ Applied</span>}
+              {generationResult.testErrors && generationResult.testErrors.length > 0 && (
+                <div className="validation-errors">
+                  <strong>Test failures:</strong>
+                  <ul>
+                    {generationResult.testErrors.map((err, i) => (
+                      <li key={i}><pre style={{whiteSpace: 'pre-wrap', fontSize: '10px', margin: 0}}>{err}</pre></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {generationResult.diffs
+                .filter((d: FileDiff) => !dismissedDiffs.has(d.unifiedDiff))
+                .map((diff: FileDiff, index: number) => {
+                  const isApplying = applyingDiff === diff.unifiedDiff;
+                  const isReverting = revertingDiff === diff.unifiedDiff;
+                  const isApplied = appliedDiffs.has(diff.unifiedDiff);
+                  const hasError = applyError?.diff === diff.unifiedDiff;
+                  return (
+                    <div key={index} className="diff-card">
+                      <div className="diff-header">
+                        <span className="diff-path">{diff.path}</span>
+                        <span className="hint">({diff.language})</span>
+                        {diff.isNewFile && <span className="badge new-file">New file</span>}
+                        {isApplied && <span className="badge applied">✓ Applied</span>}
+                      </div>
+                      <pre className="diff-content">{diff.unifiedDiff}</pre>
+                      <div className="diff-actions">
+                        <button
+                          className="button secondary"
+                          onClick={() => openDiffInEditor(diff.path, diff.unifiedDiff, diff.isNewFile)}
+                          title="Open side-by-side diff in VS Code editor"
+                        >
+                          🔍 View in Editor
+                        </button>
+                        {!isApplied ? (
+                          <>
+                            <button
+                              className="button"
+                              onClick={() => applyDiff(diff.unifiedDiff)}
+                              disabled={status !== "online" || isApplying}
+                            >
+                              {isApplying ? "Applying…" : "✓ Apply"}
+                            </button>
+                            <button
+                              className="button secondary"
+                              onClick={() => dismissDiff(diff.unifiedDiff)}
+                              title="Reject and dismiss this diff"
+                            >
+                              ✕ Reject
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="button danger"
+                            onClick={() => revertDiff(diff.unifiedDiff)}
+                            disabled={status !== "online" || isReverting}
+                          >
+                            {isReverting ? "Reverting…" : "⎌ Revert"}
+                          </button>
+                        )}
+                      </div>
+                      {hasError && <p className="error-text">{applyError.message}</p>}
                     </div>
-                    <pre className="diff-content">{diff.unifiedDiff}</pre>
-                    <button
-                      className="button"
-                      onClick={() => applyDiff(diff.unifiedDiff)}
-                      disabled={status !== "online" || isApplying || isApplied}
-                    >
-                      {isApplying ? "Applying…" : isApplied ? "✓ Applied" : "✓ Apply this diff"}
-                    </button>
-                    {hasError && <p className="error-text">{applyError.message}</p>}
+                  );
+                })}
+
+              <div className="test-validation-section">
+                <div className="sub-label">Workspace Test Validation</div>
+                <button
+                  className="button secondary"
+                  onClick={runWorkspaceTests}
+                  disabled={status !== "online" || runningTests}
+                >
+                  {runningTests ? "Running tests…" : "🧪 Run Workspace Tests (pytest)"}
+                </button>
+                {testRunResult && (
+                  <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
+                    <p style={{ margin: "0 0 4px 0" }}>
+                      <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
+                    </p>
+                    {testRunResult.output && (
+                      <details style={{ marginTop: "4px" }}>
+                        <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>
+                        <pre className="test-output-log">{testRunResult.output}</pre>
+                      </details>
+                    )}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </section>
           )}
 
