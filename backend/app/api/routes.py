@@ -43,6 +43,11 @@ from app.schemas.transcription import (
     TranscriptSegment,
 )
 from app.schemas.validation import TestRunRequest, TestRunResponse
+from app.schemas.voice_answers import (
+    MapAnswersRequest,
+    MapAnswersResponse,
+    MappedAnswerItem,
+)
 from app.schemas.tts import SpeakRequest, SpeakResponse, StopSpeakResponse
 from app.services import audio_store
 from app.services import recorder as audio_recorder
@@ -52,6 +57,7 @@ from app.services import project_context as context_service
 from app.services import code_generation as generation_service
 from app.services import validation as validation_service
 from app.services import tts as tts_service
+from app.services import voice_answers as voice_answers_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -510,3 +516,32 @@ def stop_speaking() -> StopSpeakResponse:
     """Stop the current utterance (no-op success if nothing is playing)."""
     was_playing = tts_service.stop()
     return StopSpeakResponse(stopped=was_playing)
+
+
+# ---------------------------------------------------------------------------
+# Voice answers: map a spoken reply onto pending clarification questions
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/requirements/map-answers", response_model=MapAnswersResponse)
+def map_spoken_answers(payload: MapAnswersRequest) -> MapAnswersResponse:
+    """Convert one free-form spoken transcript into per-question answers.
+
+    Every question comes back (same order); unanswered ones get "" so the
+    caller can decide whether to re-ask.
+    """
+    try:
+        answers, model_name, seconds = voice_answers_service.map_spoken_answers(
+            payload.questions, payload.transcript
+        )
+        return MapAnswersResponse(
+            answers=[MappedAnswerItem(question=a.question, answer=a.answer) for a in answers],
+            model=model_name,
+            processing_seconds=round(seconds, 2),
+        )
+    except voice_answers_service.LLMUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except voice_answers_service.AnswerMappingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

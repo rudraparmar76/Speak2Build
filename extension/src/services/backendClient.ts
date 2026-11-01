@@ -138,6 +138,12 @@ export interface StopSpeakResponse {
   stopped: boolean;
 }
 
+export interface MappedAnswersResponse {
+  answers: Array<{ question: string; answer: string }>;
+  model: string;
+  processing_seconds: number;
+}
+
 interface GenerationOptions {
   include_tests?: boolean;
   max_files?: number;
@@ -425,6 +431,19 @@ export class BackendClient {
       "/api/tts/stop",
       { method: "POST" },
       REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /** Map one spoken-reply transcript onto pending clarification questions. */
+  async mapAnswers(questions: string[], transcript: string): Promise<MappedAnswersResponse> {
+    return await this.request<MappedAnswersResponse>(
+      "POST",
+      "/api/requirements/map-answers",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions, transcript }),
+      },
+      REQUIREMENTS_TIMEOUT_MS,
     );
   }
 

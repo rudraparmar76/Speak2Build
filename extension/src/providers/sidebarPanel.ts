@@ -535,6 +535,20 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           this.post({ type: "speakingStopped" });
           break;
         }
+        case "transcribeAnswer": {
+          const result = await client.transcribe(message.audioId);
+          this.post({ type: "answerTranscript", text: result.text });
+          break;
+        }
+        case "mapAnswers": {
+          const mapped = await client.mapAnswers(message.questions, message.transcript);
+          this.post({
+            type: "answersMapped",
+            answers: mapped.answers,
+            model: mapped.model,
+          });
+          break;
+        }
         default: {
           // Exhaustiveness guard: if a new WebviewToHost variant is added
           // without a case here, TypeScript flags this as an unhandled type.

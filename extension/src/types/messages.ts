@@ -68,7 +68,11 @@ export type WebviewToHost =
   /** Webview → host: read text aloud through the backend's speakers. */
   | { type: "speak"; text: string; voice?: string }
   /** Webview → host: cancel current playback. */
-  | { type: "stopSpeaking" };
+  | { type: "stopSpeaking" }
+  /** Voice-answers flow: transcribe a dedicated answer recording. */
+  | { type: "transcribeAnswer"; audioId: string }
+  /** Voice-answers flow: map the transcript onto pending questions. */
+  | { type: "mapAnswers"; questions: string[]; transcript: string };
 
 export type LlmConfigData = {
   provider: string;
@@ -235,7 +239,10 @@ export type HostToWebview =
   /** Playback started on the backend. */
   | { type: "speakingStarted"; characters: number; estimatedSeconds: number; voice: string }
   /** Playback finished being cancelled / stopped. */
-  | { type: "speakingStopped" };
+  | { type: "speakingStopped" }
+  /** Voice-answers flow intermediates. */
+  | { type: "answerTranscript"; text: string }
+  | { type: "answersMapped"; answers: Array<{ question: string; answer: string }>; model: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */
 export interface VsCodeApi {

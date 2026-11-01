@@ -188,6 +188,18 @@ export function App() {
   const [speaking, setSpeaking] = useState(false);
   const speakingTimerRef = useRef<number | null>(null);
 
+  // Voice-answers flow: idle → recording → processing → idle.
+  const [answerFlow, setAnswerFlow] = useState<"idle" | "recording" | "processing">("idle");
+  const answerFlowRef = useRef<"idle" | "recording" | "processing">("idle");
+  const openQuestionsRef = useRef<string[]>([]);
+  const setAnswerFlowBoth = useCallback(
+    (next: "idle" | "recording" | "processing") => {
+      answerFlowRef.current = next;
+      setAnswerFlow(next);
+    },
+    [],
+  );
+
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
       { id: Date.now() + Math.random(), text, timestamp: new Date().toLocaleTimeString() },
@@ -259,6 +271,16 @@ export function App() {
           break;
         }
         case "audioUploaded": {
+          // The dedicated voice-answers recording must NOT clobber the main
+          // transcript flow — route it into the answer state machine instead.
+          if (answerFlowRef.current === "recording") {
+            setAnswerFlowBoth("processing");
+            pushHistory(
+              `Answers recorded (${message.durationSeconds.toFixed(1)}s) — transcribing…`,
+            );
+            vscode.postMessage({ type: "transcribeAnswer", audioId: message.audioId });
+            break;
+          }
           setRecorderState("idle");
           setLastUpload({
             audioId: message.audioId,
@@ -346,6 +368,11 @@ export function App() {
           setContextError(message.message);
           setRecorderError((prevRecorderError) => message.message);
           setSpeaking(false);
+          // Abort any in-flight voice-answers run.
+          if (answerFlowRef.current !== "idle") {
+            openQuestionsRef.current = [];
+            setAnswerFlowBoth("idle");
+          }
           pushHistory(`Error: ${message.message}`);
           break;
         }
@@ -464,6 +491,39 @@ export function App() {
           });
           break;
         }
+        case "answersMapped": {
+          const merged: Record<string, string> = {};
+          for (const { question, answer } of message.answers) {
+            if (answer.trim().length > 0) {
+              merged[question] = answer.trim();
+            }
+          }
+          setExtractAnswers((current) => ({ ...current, ...merged }));
+          openQuestionsRef.current = [];
+          setAnswerFlowBoth("idle");
+          pushHistory(
+            `Voice answers mapped (${message.model}): ` +
+              `${Object.keys(merged).length} of ${message.answers.length} answered — re-extracting…`,
+          );
+          void extractRequirementsRef.current?.(merged);
+          break;
+        }
+        case "answerTranscript": {
+          const text = message.text.trim();
+          const questions = openQuestionsRef.current;
+          if (!text || questions.length === 0) {
+            openQuestionsRef.current = [];
+            setAnswerFlowBoth("idle");
+            setRecorderError("No speech detected — start again and speak your answers.");
+            pushHistory("Voice answers: nothing speakable found.");
+            break;
+          }
+          pushHistory(
+            `Answers captured: "${text.length > 80 ? `${text.slice(0, 80)}…` : text}" — mapping to questions…`,
+          );
+          vscode.postMessage({ type: "mapAnswers", questions, transcript: text });
+          break;
+        }
         case "speakingStarted": {
           setSpeaking(true);
           armSpeakingTimer(message.estimatedSeconds);
@@ -492,7 +552,7 @@ export function App() {
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [pushHistory, speakText, armSpeakingTimer]);
+  }, [pushHistory, speakText, armSpeakingTimer, setAnswerFlowBoth]);
 
   // Ask the host to check backend health once on mount, and load current LLM config.
   useEffect(() => {
@@ -623,6 +683,13 @@ export function App() {
     setExtractAnswers((current) => ({ ...current, [question]: value }));
   }, []);
 
+  // Stable access to the latest extractRequirements from the message handler
+  // (which must not re-register on every state change).
+  const extractRequirementsRef = useRef(extractRequirements);
+  useEffect(() => {
+    extractRequirementsRef.current = extractRequirements;
+  }, [extractRequirements]);
+
   const scanWorkspace = useCallback(() => {
     vscode.postMessage({ type: "scanContext", workspaceRoot: "${workspaceFolder}" });
     setScanning(true);
@@ -730,6 +797,26 @@ export function App() {
   const removeSession = useCallback((sessionId: string) => {
     vscode.postMessage({ type: "deleteSession", sessionId });
   }, []);
+
+  // Voice answers: record one take that covers all open questions, then map.
+  const startVoiceAnswers = useCallback(
+    (questions: string[]) => {
+      if (status !== "online" || questions.length === 0) {
+        return;
+      }
+      openQuestionsRef.current = questions;
+      stopVoiceNow();
+      setAnswerFlowBoth("recording");
+      setRecorderError(null);
+      vscode.postMessage({ type: "startRecording" });
+    },
+    [status, stopVoiceNow, setAnswerFlowBoth],
+  );
+
+  // Recording is still owned by the standard recorder messages; stopping it
+  // produces audioUploaded, which the message handler routes into the answer
+  // flow instead of the normal transcript flow.
+  const finishVoiceAnswers = stopRecording;
 
   const runWorkspaceTests = useCallback(() => {
     setRunningTests(true);
@@ -1253,6 +1340,7 @@ export function App() {
                 disabled={
                   status !== "online" ||
                   extracting ||
+                  answerFlow !== "idle" ||
                   (Object.values(extractAnswers).every((a) => a.trim().length === 0) &&
                     (!relevantResult || relevantResult.snippets.length === 0))
                 }
@@ -1263,6 +1351,39 @@ export function App() {
                   ? "⚙ Re-extract with context & answers"
                   : "⚙ Re-extract with answers"}
               </button>
+              <div className="voice-answers-flow">
+                {answerFlow === "idle" &&
+                  requirement.clarifications.some((item) => !item.answer) && (
+                    <button
+                      className="button secondary"
+                      onClick={() =>
+                        startVoiceAnswers(
+                          requirement.clarifications
+                            .filter((item) => !item.answer)
+                            .map((item) => item.question),
+                        )
+                      }
+                      title="Record one spoken take answering every open question"
+                      disabled={status !== "online"}
+                    >
+                      🎤 Answer all by voice
+                    </button>
+                  )}
+                {answerFlow === "recording" && (
+                  <>
+                    <p className="hint">
+                      🎙 Recording — speak each answer in the order the questions were asked,
+                      pause between them, then stop.
+                    </p>
+                    <button className="button" onClick={finishVoiceAnswers}>
+                      ■ Stop &amp; process answers
+                    </button>
+                  </>
+                )}
+                {answerFlow === "processing" && (
+                  <p className="hint">↻ Transcribing and mapping your spoken answers…</p>
+                )}
+              </div>
             </div>
           )}
         </section>
