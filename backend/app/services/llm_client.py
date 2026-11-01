@@ -36,7 +36,7 @@ API_KEY_ENV = "SPEAK2BUILD_LLM_API_KEY"
 TIMEOUT_ENV = "SPEAK2BUILD_LLM_TIMEOUT"
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_TIMEOUT_SECONDS = 60.0
+DEFAULT_TIMEOUT_SECONDS = 120.0
 
 # Retry configuration for transient errors (429 rate-limit, 5xx server errors)
 MAX_RETRIES = 3

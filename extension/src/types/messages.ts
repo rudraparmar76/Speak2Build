@@ -36,7 +36,32 @@ export type WebviewToHost =
   /** Open proposed diff in VS Code native side-by-side diff editor. */
   | { type: "openDiffInEditor"; filePath: string; unifiedDiff: string; isNewFile?: boolean }
   /** Run pytest in the workspace and report results. */
-  | { type: "runWorkspaceTests"; testPath?: string };
+  | { type: "runWorkspaceTests"; testPath?: string }
+  /** Open VS Code Settings filtered to Speak2Build. */
+  | { type: "openSettings" }
+  /** Request current LLM config state. */
+  | { type: "getLlmConfig" }
+  /** Update LLM provider, model, and optional API key. */
+  | {
+      type: "updateLlmConfig";
+      provider: string;
+      model: string;
+      apiKey?: string;
+    }
+  /** Test connection to LLM with candidate credentials. */
+  | {
+      type: "testLlmConfig";
+      provider: string;
+      model: string;
+      apiKey?: string;
+    };
+
+export type LlmConfigData = {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  configuredProviders: Record<string, boolean>;
+};
 
 export type ClarificationInfo = {
   question: string;
@@ -129,6 +154,9 @@ export type HostToWebview =
   | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "testRunResult"; result: TestRunResult }
+  | { type: "llmConfigResult"; config: LlmConfigData }
+  | { type: "llmConfigSaved"; success: boolean; model: string; provider: string }
+  | { type: "llmTestResult"; valid: boolean; message: string; latencyMs: number }
   | { type: "hostError"; message: string };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */

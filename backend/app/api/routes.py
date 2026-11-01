@@ -12,7 +12,15 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
-from app.schemas.common import HealthResponse, PingRequest, PingResponse
+from app.schemas.common import (
+    HealthResponse,
+    PingRequest,
+    PingResponse,
+    LLMConfigRequest,
+    LLMConfigResponse,
+    LLMTestRequest,
+    LLMTestResponse,
+)
 from app.schemas.context import (
     RelevantRequest,
     RelevantResponse,
@@ -45,6 +53,13 @@ from app.services import validation as validation_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
+    LLMConfig,
+    OpenAICompatibleLLM,
+    load_config_from_env,
+    BASE_URL_ENV,
+    MODEL_ENV,
+    API_KEY_ENV,
+    TIMEOUT_ENV,
 )
 
 router = APIRouter()
@@ -77,6 +92,87 @@ def ping(payload: PingRequest) -> PingResponse:
         received_chars=len(payload.message),
         timestamp=time.time(),
     )
+
+
+@router.get("/api/llm/config", response_model=LLMConfigResponse)
+def get_llm_config() -> LLMConfigResponse:
+    """Return current LLM configuration (API key masked)."""
+    config = load_config_from_env()
+    return LLMConfigResponse(
+        base_url=config.base_url,
+        model=config.model,
+        has_api_key=config.api_key is not None and len(config.api_key) > 0,
+        timeout=int(config.timeout_seconds),
+        configured=bool(config.model),
+    )
+
+
+@router.put("/api/llm/config", response_model=LLMConfigResponse)
+def update_llm_config(payload: LLMConfigRequest) -> LLMConfigResponse:
+    """Update LLM configuration via environment variables."""
+    if payload.base_url:
+        os.environ[BASE_URL_ENV] = payload.base_url
+    if payload.model:
+        os.environ[MODEL_ENV] = payload.model
+    # Explicitly set or clear API key
+    if payload.api_key:
+        os.environ[API_KEY_ENV] = payload.api_key
+    elif payload.api_key == "":
+        os.environ[API_KEY_ENV] = ""
+    if payload.timeout:
+        os.environ[TIMEOUT_ENV] = str(payload.timeout)
+
+    config = load_config_from_env()
+    return LLMConfigResponse(
+        base_url=config.base_url,
+        model=config.model,
+        has_api_key=config.api_key is not None and len(config.api_key) > 0,
+        timeout=int(config.timeout_seconds),
+        configured=bool(config.model),
+    )
+
+
+@router.post("/api/llm/test", response_model=LLMTestResponse)
+def test_llm_credentials(payload: LLMTestRequest) -> LLMTestResponse:
+    """Validate LLM credentials by sending a lightweight test completion."""
+    start_time = time.monotonic()
+    api_key = payload.api_key if payload.api_key is not None else (os.environ.get(API_KEY_ENV) or None)
+    config = LLMConfig(
+        base_url=payload.base_url.rstrip("/"),
+        model=payload.model,
+        api_key=api_key or None,
+        timeout_seconds=float(payload.timeout),
+    )
+    client = OpenAICompatibleLLM(config)
+    try:
+        reply = client.complete(
+            system="You are an API validator. Respond with the single word 'PONG'.",
+            user="PING",
+        )
+        latency = (time.monotonic() - start_time) * 1000.0
+        return LLMTestResponse(
+            valid=True,
+            message=f"Connected successfully ({payload.model})",
+            latency_ms=round(latency, 1),
+        )
+    except LLMUnavailableError as exc:
+        return LLMTestResponse(
+            valid=False,
+            message=f"Cannot reach provider: {exc}",
+            latency_ms=0.0,
+        )
+    except LLMRequestError as exc:
+        return LLMTestResponse(
+            valid=False,
+            message=f"Provider rejected request: {exc}",
+            latency_ms=0.0,
+        )
+    except Exception as exc:
+        return LLMTestResponse(
+            valid=False,
+            message=f"Validation error: {exc}",
+            latency_ms=0.0,
+        )
 
 
 @router.post("/api/audio", response_model=AudioUploadResponse, status_code=201)

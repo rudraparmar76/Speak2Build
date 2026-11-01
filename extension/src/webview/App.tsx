@@ -8,12 +8,69 @@ import type {
   FileNode,
   GenerationResult,
   HostToWebview,
+  LlmConfigData,
   RelevantResult,
   RequirementResult,
   ScanResult,
   Snippet,
   TestRunResult,
 } from "../types/messages";
+
+const PROVIDER_MODELS: Record<string, { label: string; models: { id: string; name: string }[]; needsKey: boolean; keyHint: string; keyUrl?: string }> = {
+  "google-ai-studio": {
+    label: "Google AI Studio (Gemini)",
+    models: [
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recommended - Free, Fast)" },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Deep Reasoning)" },
+    ],
+    needsKey: true,
+    keyHint: "Get free key from aistudio.google.com",
+    keyUrl: "https://aistudio.google.com/apikey",
+  },
+  "groq": {
+    label: "Groq Cloud",
+    models: [
+      { id: "qwen-qwq-32b", name: "Qwen QwQ 32B (Very Fast, High Quality)" },
+      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
+      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+    ],
+    needsKey: true,
+    keyHint: "Get free key from console.groq.com",
+    keyUrl: "https://console.groq.com/keys",
+  },
+  "ollama": {
+    label: "Ollama (Local)",
+    models: [
+      { id: "qwen3:14b", name: "Qwen 3 14B (Recommended)" },
+      { id: "qwen3:8b", name: "Qwen 3 8B (Fast, Low VRAM)" },
+      { id: "qwen3:32b", name: "Qwen 3 32B (Best Quality)" },
+      { id: "llama3.3:latest", name: "Llama 3.3 70B" },
+    ],
+    needsKey: false,
+    keyHint: "No API key needed (runs locally at 127.0.0.1:11434)",
+  },
+  "nvidia-nim": {
+    label: "NVIDIA NIM",
+    models: [
+      { id: "nvidia/nemotron-3-ultra-550b-a55b", name: "Nemotron 3 Ultra 550B (Current)" },
+      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
+    ],
+    needsKey: true,
+    keyHint: "Get key from build.nvidia.com",
+    keyUrl: "https://build.nvidia.com",
+  },
+  "openai": {
+    label: "OpenAI",
+    models: [
+      { id: "gpt-4.1-mini", name: "GPT-4.1 mini (Recommended)" },
+      { id: "gpt-4.1", name: "GPT-4.1 (Flagship)" },
+      { id: "gpt-4o", name: "GPT-4o" },
+    ],
+    needsKey: true,
+    keyHint: "Get key from platform.openai.com",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+};
 
 const vscode = getVsCodeApi();
 
@@ -92,6 +149,16 @@ export function App() {
   const [runningTests, setRunningTests] = useState(false);
   const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
   const revertingDiffRef = useRef<string | null>(null);
+
+  // In-UI LLM Settings modal
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string>("google-ai-studio");
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-2.5-flash");
+  const [apiKeyInput, setApiKeyInput] = useState<string>("");
+  const [configuredProviders, setConfiguredProviders] = useState<Record<string, boolean>>({});
+  const [settingsSavedMsg, setSettingsSavedMsg] = useState<string | null>(null);
+  const [testingConnection, setTestingConnection] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<{ valid: boolean; message: string; latencyMs: number } | null>(null);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -206,6 +273,8 @@ export function App() {
           setExtractError(message.message);
           setScanning(false);
           setFetchingRelevant(false);
+          setGenerating(false);
+          setGenerationError(message.message);
           setContextError(message.message);
           setRecorderError((prevRecorderError) => message.message);
           pushHistory(`Error: ${message.message}`);
@@ -285,15 +354,46 @@ export function App() {
           pushHistory(`Tests: ${message.result.summary}`);
           break;
         }
+        case "llmConfigResult": {
+          if (message.config.provider && PROVIDER_MODELS[message.config.provider]) {
+            setSelectedProvider(message.config.provider);
+          }
+          if (message.config.model) {
+            setSelectedModel(message.config.model);
+          }
+          if (message.config.configuredProviders) {
+            setConfiguredProviders(message.config.configuredProviders);
+          }
+          break;
+        }
+        case "llmConfigSaved": {
+          setSettingsSavedMsg(`Saved! Using ${message.model}`);
+          pushHistory(`LLM changed: ${message.provider} / ${message.model}`);
+          setTimeout(() => {
+            setSettingsSavedMsg(null);
+            setShowSettings(false);
+          }, 1500);
+          break;
+        }
+        case "llmTestResult": {
+          setTestingConnection(false);
+          setTestResult({
+            valid: message.valid,
+            message: message.message,
+            latencyMs: message.latencyMs,
+          });
+          break;
+        }
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [pushHistory]);
 
-  // Ask the host to check backend health once on mount.
+  // Ask the host to check backend health once on mount, and load current LLM config.
   useEffect(() => {
     vscode.postMessage({ type: "checkHealth" });
+    vscode.postMessage({ type: "getLlmConfig" });
   }, []);
 
   // Elapsed-time display while the backend owns the mic.
@@ -523,7 +623,187 @@ export function App() {
           <strong>{status === "online" ? "Backend connected" : status === "offline" ? "Backend offline" : "Checking backend…"}</strong>
           <span>{statusDetail}</span>
         </div>
+        <button
+          className={`settings-gear-btn ${showSettings ? "active" : ""}`}
+          style={{ marginLeft: "auto" }}
+          onClick={() => {
+            setShowSettings((prev) => !prev);
+            if (!showSettings) {
+              vscode.postMessage({ type: "getLlmConfig" });
+            }
+          }}
+          title="Configure LLM Provider & Model"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.4.5v1.2l2.4.5.3.8-1.3 2 .8.8 2-1.3.8.3.4 2.3h1.2l.5-2.4.8-.3 2 1.3.8-.8-1.3-2 .3-.8 2.3-.4V7.4l-2.4-.5-.3-.7 1.3-2-.8-.9-2 1.3-.7-.2zm-1.1 5c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/>
+          </svg>
+        </button>
       </section>
+
+      {/* In-UI LLM Model & Provider Settings */}
+      {showSettings && (
+        <section className="settings-modal-card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontWeight: 600, fontSize: "12px" }}>🤖 LLM Provider & Model</span>
+            <button
+              onClick={() => setShowSettings(false)}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6 }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="settings-field">
+            <label htmlFor="llm-provider-select">Provider</label>
+            <select
+              id="llm-provider-select"
+              className="settings-select"
+              value={selectedProvider}
+              onChange={(e) => {
+                const prov = e.target.value;
+                setSelectedProvider(prov);
+                const models = PROVIDER_MODELS[prov]?.models;
+                if (models && models.length > 0) {
+                  setSelectedModel(models[0].id);
+                }
+              }}
+            >
+              {Object.entries(PROVIDER_MODELS).map(([key, info]) => (
+                <option key={key} value={key}>
+                  {info.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="settings-field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label htmlFor="llm-model-input">Model Name</label>
+              <span style={{ fontSize: "10px", opacity: 0.7 }}>e.g. gemini-2.5-flash, qwen-qwq-32b</span>
+            </div>
+            <input
+              id="llm-model-input"
+              type="text"
+              className="settings-input"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              placeholder="Enter model name..."
+            />
+          </div>
+
+          {PROVIDER_MODELS[selectedProvider]?.needsKey && (
+            <div className="settings-field">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label htmlFor="llm-api-key-input">
+                  API Key {configuredProviders[selectedProvider] && !apiKeyInput && (
+                    <span style={{ color: "#4ade80", fontWeight: "normal" }}>(Key configured ✓)</span>
+                  )}
+                </label>
+                {PROVIDER_MODELS[selectedProvider]?.keyUrl && (
+                  <span style={{ fontSize: "10px", opacity: 0.8 }}>
+                    {PROVIDER_MODELS[selectedProvider]?.keyHint}
+                  </span>
+                )}
+              </div>
+              <input
+                id="llm-api-key-input"
+                type="password"
+                className="settings-input"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder={
+                  configuredProviders[selectedProvider]
+                    ? "•••••••••••••••• (Leave blank to keep existing)"
+                    : "Paste your API key here (required)"
+                }
+              />
+            </div>
+          )}
+
+          {!PROVIDER_MODELS[selectedProvider]?.needsKey && (
+            <div style={{ fontSize: "11px", opacity: 0.75, background: "rgba(255,255,255,0.05)", padding: "6px 8px", borderRadius: "4px" }}>
+              💡 {PROVIDER_MODELS[selectedProvider]?.keyHint}
+            </div>
+          )}
+
+          {testResult && (
+            <div
+              style={{
+                fontSize: "11px",
+                padding: "6px 8px",
+                borderRadius: "4px",
+                background: testResult.valid ? "rgba(35, 134, 54, 0.15)" : "rgba(218, 54, 51, 0.15)",
+                border: `1px solid ${testResult.valid ? "#238636" : "#da3633"}`,
+                color: testResult.valid ? "#4ade80" : "#f87171",
+              }}
+            >
+              {testResult.valid ? "✓ " : "✗ "}
+              {testResult.message}
+              {testResult.valid && testResult.latencyMs > 0 && ` (${testResult.latencyMs}ms)`}
+            </div>
+          )}
+
+          {settingsSavedMsg && (
+            <div style={{ color: "#4ade80", fontSize: "11px", textAlign: "center" }}>
+              ✓ {settingsSavedMsg}
+            </div>
+          )}
+
+          <div className="settings-actions">
+            <button
+              className="button secondary"
+              style={{ padding: "4px 10px", fontSize: "11px" }}
+              disabled={testingConnection}
+              onClick={() => {
+                setTestingConnection(true);
+                setTestResult(null);
+                vscode.postMessage({
+                  type: "testLlmConfig",
+                  provider: selectedProvider,
+                  model: selectedModel.trim(),
+                  apiKey: apiKeyInput.trim() || undefined,
+                });
+              }}
+            >
+              {testingConnection ? "Pinging…" : "🔌 Test Key"}
+            </button>
+            <button
+              className="button secondary"
+              style={{ padding: "4px 10px", fontSize: "11px" }}
+              onClick={() => setShowSettings(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button"
+              style={{ padding: "4px 12px", fontSize: "11px" }}
+              disabled={
+                !selectedModel.trim() ||
+                (PROVIDER_MODELS[selectedProvider]?.needsKey &&
+                  !configuredProviders[selectedProvider] &&
+                  !apiKeyInput.trim())
+              }
+              title={
+                PROVIDER_MODELS[selectedProvider]?.needsKey &&
+                !configuredProviders[selectedProvider] &&
+                !apiKeyInput.trim()
+                  ? "Enter an API key before proceeding"
+                  : "Save and apply this configuration"
+              }
+              onClick={() => {
+                vscode.postMessage({
+                  type: "updateLlmConfig",
+                  provider: selectedProvider,
+                  model: selectedModel.trim(),
+                  apiKey: apiKeyInput.trim() || undefined,
+                });
+              }}
+            >
+              Apply & Save
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 1. Project Context (Context-First Workflow) */}
       <section className="card">

@@ -10,7 +10,25 @@ import type {
   FileNode as FrontendFileNode,
 } from "../types/messages";
 import { BackendClient, describeError } from "../services/backendClient";
-import type { FileNode as BackendFileNode } from "../services/backendClient";
+import type { FileNode as BackendFileNode, LLMConfigStatus } from "../services/backendClient";
+
+/** Known provider base URLs. */
+const PROVIDER_URLS: Record<string, string> = {
+  "google-ai-studio": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "groq": "https://api.groq.com/openai/v1",
+  "ollama": "http://127.0.0.1:11434/v1",
+  "nvidia-nim": "https://integrate.api.nvidia.com/v1",
+  "openai": "https://api.openai.com/v1",
+};
+
+/** Default model per provider (when user doesn't specify one). */
+const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  "google-ai-studio": "gemini-2.5-flash",
+  "groq": "qwen-qwq-32b",
+  "ollama": "qwen3:14b",
+  "nvidia-nim": "nvidia/nemotron-3-ultra-550b-a55b",
+  "openai": "gpt-4.1-mini",
+};
 
 /**
  * Owns the sidebar webview lifecycle:
@@ -63,6 +81,10 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
         case "checkHealth": {
           const health = await client.health();
           this.post({ type: "health", ...health });
+          // Sync LLM config from VS Code settings → backend (fire-and-forget)
+          if (health.ok) {
+            this.syncLlmConfig(client).catch(() => {/* best-effort */});
+          }
           break;
         }
         case "ping": {
@@ -341,6 +363,101 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           });
           break;
         }
+        case "openSettings": {
+          await vscode.commands.executeCommand("workbench.action.openSettings", "speak2build");
+          break;
+        }
+        case "getLlmConfig": {
+          const cfg = vscode.workspace.getConfiguration("speak2build");
+          const provider = cfg.get<string>("llmProvider", "nvidia-nim");
+          const backendCfg = await client.getLlmConfig();
+          const configuredKeys = cfg.get<Record<string, string>>("llmApiKeys", {});
+          const configuredProviders: Record<string, boolean> = {
+            "ollama": true, // ollama never needs key
+            "google-ai-studio": Boolean(configuredKeys["google-ai-studio"]),
+            "groq": Boolean(configuredKeys["groq"]),
+            "openai": Boolean(configuredKeys["openai"]),
+            "nvidia-nim": Boolean(configuredKeys["nvidia-nim"] || (backendCfg.has_api_key && backendCfg.base_url.includes("nvidia"))),
+          };
+
+          this.post({
+            type: "llmConfigResult",
+            config: {
+              provider,
+              baseUrl: backendCfg.base_url,
+              model: backendCfg.model,
+              configuredProviders,
+            },
+          });
+          break;
+        }
+        case "updateLlmConfig": {
+          const provider = message.provider;
+          const baseUrl = PROVIDER_URLS[provider] || "";
+          const model = message.model || PROVIDER_DEFAULT_MODELS[provider] || "";
+          const apiKey = message.apiKey || "";
+
+          // Also persist into VS Code settings so they stay across restarts
+          const cfg = vscode.workspace.getConfiguration("speak2build");
+          await cfg.update("llmProvider", provider, vscode.ConfigurationTarget.Global);
+          await cfg.update("llmModel", model, vscode.ConfigurationTarget.Global);
+          
+          let effectiveKey = apiKey;
+          const keysMap = { ...cfg.get<Record<string, string>>("llmApiKeys", {}) };
+          if (apiKey) {
+            keysMap[provider] = apiKey;
+            await cfg.update("llmApiKeys", keysMap, vscode.ConfigurationTarget.Global);
+            await cfg.update("llmApiKey", apiKey, vscode.ConfigurationTarget.Global);
+          } else {
+            effectiveKey = keysMap[provider] || "";
+          }
+
+          // Push to live backend
+          await client.updateLlmConfig({
+            base_url: baseUrl,
+            model,
+            api_key: effectiveKey,
+          });
+
+          this.post({
+            type: "llmConfigSaved",
+            success: true,
+            provider,
+            model,
+          });
+          break;
+        }
+        case "testLlmConfig": {
+          const provider = message.provider;
+          const baseUrl = PROVIDER_URLS[provider] || "";
+          const model = message.model || PROVIDER_DEFAULT_MODELS[provider] || "";
+          
+          const cfg = vscode.workspace.getConfiguration("speak2build");
+          const keysMap = cfg.get<Record<string, string>>("llmApiKeys", {});
+          const effectiveKey = message.apiKey || keysMap[provider] || "";
+
+          try {
+            const testRes = await client.testLlm({
+              base_url: baseUrl,
+              model,
+              api_key: effectiveKey,
+            });
+            this.post({
+              type: "llmTestResult",
+              valid: testRes.valid,
+              message: testRes.message,
+              latencyMs: testRes.latency_ms,
+            });
+          } catch (err: unknown) {
+            this.post({
+              type: "llmTestResult",
+              valid: false,
+              message: describeError(err, baseUrl),
+              latencyMs: 0,
+            });
+          }
+          break;
+        }
         default: {
           // Exhaustiveness guard: if a new WebviewToHost variant is added
           // without a case here, TypeScript flags this as an unhandled type.
@@ -366,6 +483,37 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
 
   private post(message: HostToWebview): void {
     void this._view?.webview.postMessage(message);
+  }
+
+  /**
+   * Read LLM settings from VS Code configuration and push them to the
+   * backend so the user never needs to touch .env files.
+   */
+  private async syncLlmConfig(client: BackendClient): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration("speak2build");
+    const provider = cfg.get<string>("llmProvider", "custom");
+    const userModel = cfg.get<string>("llmModel", "");
+    const userBaseUrl = cfg.get<string>("llmBaseUrl", "");
+    const timeout = cfg.get<number>("llmTimeout", 120);
+
+    const keysMap = cfg.get<Record<string, string>>("llmApiKeys", {});
+    const apiKey = keysMap[provider] || cfg.get<string>("llmApiKey", "");
+
+    // Resolve base URL: user override > provider default
+    const baseUrl = userBaseUrl || PROVIDER_URLS[provider] || "";
+    // Resolve model: user override > provider default
+    const model = userModel || PROVIDER_DEFAULT_MODELS[provider] || "";
+
+    if (!baseUrl && !model) {
+      return; // Nothing configured yet, let backend use its .env defaults
+    }
+
+    await client.updateLlmConfig({
+      base_url: baseUrl,
+      model,
+      api_key: apiKey,
+      timeout,
+    });
   }
 
   private getHtml(webview: vscode.Webview): string {

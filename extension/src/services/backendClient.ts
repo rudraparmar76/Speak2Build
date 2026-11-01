@@ -19,8 +19,8 @@ const REQUIREMENTS_TIMEOUT_MS = 120_000;
 const CONTEXT_SCAN_TIMEOUT_MS = 30_000;
 /** Relevance scoring is fast; keep default. */
 const RELEVANT_TIMEOUT_MS = 15_000;
-/** Code generation can take a minute or more. */
-const GENERATION_TIMEOUT_MS = 180_000;
+/** Code generation can take a minute or more (multi-file + repair loop). */
+const GENERATION_TIMEOUT_MS = 300_000;
 /** Diff apply is fast. */
 const APPLY_DIFF_TIMEOUT_MS = 10_000;
 
@@ -137,6 +137,20 @@ export interface AudioUploadResult {
   size_bytes: number;
 }
 
+export interface LLMConfigStatus {
+  base_url: string;
+  model: string;
+  has_api_key: boolean;
+  timeout: number;
+  configured: boolean;
+}
+
+export interface LLMTestResult {
+  valid: boolean;
+  message: string;
+  latency_ms: number;
+}
+
 export interface RecordingStartResult {
   sample_rate: number;
   channels: number;
@@ -174,6 +188,37 @@ export class BackendClient {
       body: JSON.stringify({ message }),
     });
     return data.echo;
+  }
+
+  /** Get current LLM configuration from the backend. */
+  async getLlmConfig(): Promise<LLMConfigStatus> {
+    return await this.request<LLMConfigStatus>("GET", "/api/llm/config");
+  }
+
+  /** Push LLM configuration from VS Code settings to the backend. */
+  async updateLlmConfig(config: {
+    base_url?: string;
+    model?: string;
+    api_key?: string;
+    timeout?: number;
+  }): Promise<LLMConfigStatus> {
+    return await this.request<LLMConfigStatus>("PUT", "/api/llm/config", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+  }
+
+  /** Test LLM credentials by requesting a quick ping from the backend. */
+  async testLlm(payload: {
+    base_url: string;
+    model: string;
+    api_key?: string;
+    timeout?: number;
+  }): Promise<LLMTestResult> {
+    return await this.request<LLMTestResult>("POST", "/api/llm/test", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }, 20_000);
   }
 
   /** Start a microphone session on the backend process. */

@@ -27,7 +27,7 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 7 | Evaluation suite (20 tasks) + metrics + demo | Planned |
 
 See `DEVELOPMENT_LOG.md` for details and `ARCHITECTURE.md` for design.
-
+  
 ## Tech Stack
 
 - **Extension:** TypeScript, React 18, VS Code Webview API, esbuild

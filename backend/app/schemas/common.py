@@ -28,3 +28,39 @@ class PingResponse(BaseModel):
     echo: str
     received_chars: int
     timestamp: float
+
+
+class LLMConfigRequest(BaseModel):
+    """LLM provider configuration pushed from the VS Code extension settings."""
+
+    base_url: str = Field(default="", max_length=500)
+    model: str = Field(default="", max_length=200)
+    api_key: str = Field(default="", max_length=500)
+    timeout: int = Field(default=120, ge=10, le=600)
+
+
+class LLMConfigResponse(BaseModel):
+    """Current LLM configuration (key masked)."""
+
+    base_url: str
+    model: str
+    has_api_key: bool
+    timeout: int
+    configured: bool
+
+
+class LLMTestRequest(BaseModel):
+    """Payload to test LLM credentials via a quick ping."""
+
+    base_url: str = Field(min_length=1, max_length=500)
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str = Field(default="", max_length=500)
+    timeout: int = Field(default=15, ge=3, le=60)
+
+
+class LLMTestResponse(BaseModel):
+    """Validation test outcome."""
+
+    valid: bool
+    message: str
+    latency_ms: float = 0.0
