@@ -5,12 +5,13 @@ import * as path from "node:path";
 import * as os from "node:os";
 
 import type {
-  WebviewToHost,
   HostToWebview,
+  WebviewToHost,
   FileNode as FrontendFileNode,
 } from "../types/messages";
 import { BackendClient, describeError } from "../services/backendClient";
 import type { FileNode as BackendFileNode, LLMConfigStatus } from "../services/backendClient";
+import { SessionStore } from "../services/sessionStore";
 
 /** Known provider base URLs. */
 const PROVIDER_URLS: Record<string, string> = {
@@ -39,11 +40,15 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "speak2build.sidebar";
 
   private _view?: vscode.WebviewView;
+  private readonly sessions: SessionStore;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly getBackendUrl: () => string,
-  ) {}
+    sessionStorage: vscode.Memento,
+  ) {
+    this.sessions = new SessionStore(sessionStorage);
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this._view = view;
@@ -431,7 +436,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           const provider = message.provider;
           const baseUrl = PROVIDER_URLS[provider] || "";
           const model = message.model || PROVIDER_DEFAULT_MODELS[provider] || "";
-          
+
           const cfg = vscode.workspace.getConfiguration("speak2build");
           const keysMap = cfg.get<Record<string, string>>("llmApiKeys", {});
           const effectiveKey = message.apiKey || keysMap[provider] || "";
@@ -456,6 +461,63 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
               latencyMs: 0,
             });
           }
+          break;
+        }
+        case "loadSessionState": {
+          const { meta, snapshot } = this.sessions.ensureActive();
+          this.post({
+            type: "sessionState",
+            activeId: meta.id,
+            session: meta,
+            snapshot,
+            sessions: this.sessions.list(),
+          });
+          break;
+        }
+        case "saveSessionState": {
+          let activeId = this.sessions.activeId();
+          if (!activeId) {
+            activeId = this.sessions.ensureActive().meta.id;
+          }
+          const sessions = this.sessions.save(activeId, message.snapshot);
+          this.post({ type: "sessionList", sessions });
+          break;
+        }
+        case "openSession": {
+          const loaded = this.sessions.open(message.sessionId);
+          if (!loaded) {
+            this.post({ type: "hostError", message: "Session not found in history." });
+            break;
+          }
+          this.post({
+            type: "sessionState",
+            activeId: loaded.meta.id,
+            session: loaded.meta,
+            snapshot: loaded.snapshot,
+            sessions: this.sessions.list(),
+          });
+          break;
+        }
+        case "newSession": {
+          const { meta, snapshot } = this.sessions.create();
+          this.post({
+            type: "sessionState",
+            activeId: meta.id,
+            session: meta,
+            snapshot,
+            sessions: this.sessions.list(),
+          });
+          break;
+        }
+        case "deleteSession": {
+          const { meta, snapshot } = this.sessions.delete(message.sessionId);
+          this.post({
+            type: "sessionState",
+            activeId: meta.id,
+            session: meta,
+            snapshot,
+            sessions: this.sessions.list(),
+          });
           break;
         }
         default: {

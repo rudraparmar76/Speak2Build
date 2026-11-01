@@ -8,10 +8,21 @@ export function activate(context: vscode.ExtensionContext): void {
       .getConfiguration("speak2build")
       .get<string>("backendUrl", "http://127.0.0.1:8000");
 
-  const provider = new SidebarPanelProvider(context.extensionUri, getBackendUrl);
+  // workspaceState survives webview teardowns and window reloads, scoped to
+  // this workspace — exactly where sidebar sessions belong.
+  const provider = new SidebarPanelProvider(
+    context.extensionUri,
+    getBackendUrl,
+    context.workspaceState,
+  );
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(SidebarPanelProvider.viewId, provider),
+    // retainContextWhenHidden keeps the React app mounted while the sidebar is
+    // hidden (e.g. the user edits a file); without it the iframe is torn down
+    // on every focus change.
+    vscode.window.registerWebviewViewProvider(SidebarPanelProvider.viewId, provider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
   );
 }
 

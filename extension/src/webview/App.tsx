@@ -12,6 +12,8 @@ import type {
   RelevantResult,
   RequirementResult,
   ScanResult,
+  SessionMeta,
+  SessionSnapshot,
   Snippet,
   TestRunResult,
 } from "../types/messages";
@@ -107,6 +109,19 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Friendly relative time for the session-history list. */
+function formatSessionTime(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 export function App() {
   const [status, setStatus] = useState<BackendStatus>("connecting");
   const [statusDetail, setStatusDetail] = useState("Contacting backend…");
@@ -159,6 +174,14 @@ export function App() {
   const [settingsSavedMsg, setSettingsSavedMsg] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ valid: boolean; message: string; latencyMs: number } | null>(null);
+
+  // Session persistence (Chat / History tabs; host keeps the durable copy).
+  const [viewTab, setViewTab] = useState<"chat" | "history">("chat");
+  const [activeSession, setActiveSession] = useState<SessionMeta | null>(null);
+  const [sessionList, setSessionList] = useState<SessionMeta[]>([]);
+  // Guards against an echo loop: while a host snapshot is being applied,
+  // the autosave effect must not immediately save it back.
+  const restoringRef = useRef(false);
 
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
@@ -384,6 +407,17 @@ export function App() {
           });
           break;
         }
+        case "sessionState": {
+          setActiveSession(message.session);
+          setSessionList(message.sessions);
+          applySnapshot(message.snapshot);
+          setViewTab("chat");
+          break;
+        }
+        case "sessionList": {
+          setSessionList(message.sessions);
+          break;
+        }
       }
     };
     window.addEventListener("message", handler);
@@ -394,7 +428,74 @@ export function App() {
   useEffect(() => {
     vscode.postMessage({ type: "checkHealth" });
     vscode.postMessage({ type: "getLlmConfig" });
+    // Restore the active session when the webview has been rebuilt.
+    vscode.postMessage({ type: "loadSessionState" });
   }, []);
+
+  // Re-apply a host-provided snapshot into the UI. Used after fresh boot,
+  // session open, new session, and delete.
+  const applySnapshot = useCallback((snap: SessionSnapshot) => {
+    restoringRef.current = true;
+    setLastUpload(snap.lastUpload);
+    setTranscript(snap.transcript);
+    setRequirement(snap.requirement);
+    setRequirementMeta(snap.requirementMeta);
+    setExtractAnswers(snap.extractAnswers ?? {});
+    setScanResult(snap.scanResult);
+    setSelectedFiles(new Set(snap.selectedFiles ?? []));
+    setRelevantResult(snap.relevantResult);
+    setGenerationResult(snap.generationResult);
+    setAppliedDiffs(new Set(snap.appliedDiffs ?? []));
+    setDismissedDiffs(new Set(snap.dismissedDiffs ?? []));
+    setTestRunResult(snap.testRunResult);
+    setHistory(snap.history ?? []);
+    // Release the save-guard once the batched renders + effects have flushed.
+    window.setTimeout(() => {
+      restoringRef.current = false;
+    }, 50);
+  }, []);
+
+  // Autosave: push meaningful state to the host (debounced) whenever it
+  // changes. Spinners, transient errors, and health status are excluded.
+  useEffect(() => {
+    if (restoringRef.current) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const snapshot: SessionSnapshot = {
+        version: 1,
+        lastUpload,
+        transcript,
+        requirement,
+        requirementMeta,
+        extractAnswers,
+        scanResult,
+        selectedFiles: Array.from(selectedFiles),
+        relevantResult,
+        generationResult,
+        appliedDiffs: Array.from(appliedDiffs),
+        dismissedDiffs: Array.from(dismissedDiffs),
+        testRunResult,
+        history,
+      };
+      vscode.postMessage({ type: "saveSessionState", snapshot });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    lastUpload,
+    transcript,
+    requirement,
+    requirementMeta,
+    extractAnswers,
+    scanResult,
+    selectedFiles,
+    relevantResult,
+    generationResult,
+    appliedDiffs,
+    dismissedDiffs,
+    testRunResult,
+    history,
+  ]);
 
   // Elapsed-time display while the backend owns the mic.
   useEffect(() => {
@@ -547,6 +648,18 @@ export function App() {
     setDismissedDiffs((prev) => new Set(prev).add(unifiedDiff));
     pushHistory("Diff rejected/dismissed");
   }, [pushHistory]);
+
+  const openPastSession = useCallback((sessionId: string) => {
+    vscode.postMessage({ type: "openSession", sessionId });
+  }, []);
+
+  const createNewSession = useCallback(() => {
+    vscode.postMessage({ type: "newSession" });
+  }, []);
+
+  const removeSession = useCallback((sessionId: string) => {
+    vscode.postMessage({ type: "deleteSession", sessionId });
+  }, []);
 
   const runWorkspaceTests = useCallback(() => {
     setRunningTests(true);
@@ -805,6 +918,27 @@ export function App() {
         </section>
       )}
 
+      {/* Session tabs: the working board vs. saved sessions */}
+      <section className="tab-bar">
+        <button
+          className={`tab ${viewTab === "chat" ? "active" : ""}`}
+          onClick={() => setViewTab("chat")}
+        >
+          💬 Chat
+        </button>
+        <button
+          className={`tab ${viewTab === "history" ? "active" : ""}`}
+          onClick={() => setViewTab("history")}
+        >
+          🕘 History{sessionList.length > 0 ? ` (${sessionList.length})` : ""}
+        </button>
+        <button className="tab new" onClick={createNewSession} title="Discard this board and start a new session">
+          ＋ New
+        </button>
+      </section>
+
+      {viewTab === "chat" ? (
+        <>
       {/* 1. Project Context (Context-First Workflow) */}
       <section className="card">
         <div className="label">Project Context</div>
@@ -1214,6 +1348,50 @@ export function App() {
           </ul>
         )}
       </section>
+        </>
+      ) : (
+        <section className="card history-tab">
+          <div className="label">🕘 Session history</div>
+          <p className="hint">
+            Sessions are saved automatically for this workspace — including transcripts,
+            requirements, context, and generated diffs.
+          </p>
+          {activeSession && (
+            <p className="hint session-active-hint">
+              Active: <strong>{activeSession.title}</strong>
+            </p>
+          )}
+          {sessionList.length === 0 ? (
+            <p className="empty">No saved sessions yet.</p>
+          ) : (
+            <ul className="session-list">
+              {sessionList.map((s) => (
+                <li
+                  key={s.id}
+                  className={`session-row ${s.id === activeSession?.id ? "active" : ""}`}
+                  onClick={() => openPastSession(s.id)}
+                  title="Open this session and continue where you left off"
+                >
+                  <div className="session-text">
+                    <span className="session-title">{s.title}</span>
+                    <span className="session-meta">{formatSessionTime(s.updatedAt)}</span>
+                  </div>
+                  <button
+                    className="session-delete"
+                    title="Delete this session"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeSession(s.id);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </main>
   );
 }

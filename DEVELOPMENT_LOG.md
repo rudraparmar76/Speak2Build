@@ -1,5 +1,61 @@
 # Speak2Build — Development Log
 
+## Milestone 6.5 — Session Persistence & History ✅
+
+**Goal:** the sidebar stops forgetting its work. When the user switches focus (or
+VS Code tears the webview down entirely), transcript, requirements, context,
+diffs, and the activity log survive; past conversations are listed in a History
+tab and can be reopened to continue where they left off.
+
+### Completed
+
+- [x] `retainContextWhenHidden: true` on the webview view registration — the
+  webview iframe stays mounted while the sidebar is hidden.
+- [x] `services/sessionStore.ts`: host-owned session store over
+  `context.workspaceState` (per-workspace, survives window reload and VS Code
+  restart). Session = id + derived title + timestamps + snapshot. History is
+  capped at 20 sessions with oldest pruning; titles auto-derive from the
+  requirement task or transcript head.
+- [x] Message contract: `loadSessionState` / `saveSessionState` / `openSession` /
+  `newSession` / `deleteSession` (webview → host); `sessionState` (full snapshot
+  + list) and `sessionList` (lightweight refresh after a background save). The
+  save → `sessionList` split avoids a webview echo loop.
+- [x] App.tsx: debounced (400 ms) autosave effect pushes a `SessionSnapshot`
+  (transcript, requirement, clarification answers, scan result, selected files,
+  snippets, diffs, applied/dismissed state, test results, activity log); a
+  `restoringRef` guard skips the autosave echo while a snapshot is applied back.
+- [x] UI: 💬 Chat / 🕘 History / ＋ New tab bar. History rows show derived title +
+  relative time, click to reopen, ✕ to delete.
+
+### Technical Decisions
+
+1. **Host as source of truth, not `webview.getState()`** — the webview storage
+   dies with the iframe; the extension host does not. `workspaceState` also
+   keeps sessions out of the repo (no stray files, no gitignore noise).
+2. **Debounced full-snapshot push** — a whole state push is a few dozen KB at
+   most and vastly simpler than per-field diffs; correctness over cleverness.
+3. **Echo-loop guard** — applying a restored snapshot would otherwise trigger
+   the autosave effect immediately; a ref flag suppresses that one save.
+4. **Transient state excluded** — spinners, inline errors, health status are
+   not persisted; restored boards land in a clean resting state.
+
+### Bugs & Fixes
+
+- First edit pass accidentally clobbered the `testLlmConfig` case body and the
+  switch's `default` exhaustiveness guard; caught by reading the region back
+  and restored before any build ran.
+- `Memento.get` rejects `null` defaults in strict typings — use
+  `get<T | undefined>(key, undefined)`.
+- `view.webviewOptions` does not exist on `WebviewView` in our VS Code typings;
+  `retainContextWhenHidden` is passed via `registerWebviewViewProvider` options.
+
+### Verification Performed
+
+- `npm run typecheck` + `npm run build`: clean.
+- Backend intentionally untouched; 91/91 tests still green.
+
+---
+
 ## Milestone 6 — Review & Validation ✅
 
 **Goal:** developer-in-the-loop patch review (VS Code native side-by-side diff editor), approve/reject controls, patch reversal/rollback, and workspace test validation (`pytest`).

@@ -54,7 +54,17 @@ export type WebviewToHost =
       provider: string;
       model: string;
       apiKey?: string;
-    };
+    }
+  /** Webview was rebuilt by VS Code: request the active session snapshot. */
+  | { type: "loadSessionState" }
+  /** Webview persists its current state (debounced; host owns storage). */
+  | { type: "saveSessionState"; snapshot: SessionSnapshot }
+  /** Switch the active session to a previously saved one. */
+  | { type: "openSession"; sessionId: string }
+  /** Discard the current board and start a fresh session. */
+  | { type: "newSession" }
+  /** Delete a saved session from history. */
+  | { type: "deleteSession"; sessionId: string };
 
 export type LlmConfigData = {
   provider: string;
@@ -140,6 +150,56 @@ export type TestRunResult = {
   output: string;
 };
 
+/** Activity-log entry shape, shared between webview state and snapshots. */
+export type SessionHistoryEntry = {
+  id: number;
+  text: string;
+  timestamp: string;
+};
+
+/**
+ * Everything the chat tab should rediscover when VS Code tears the webview
+ * down and rebuilds it later. Transient UI state (spinners, inline errors,
+ * health status) is intentionally excluded.
+ */
+export type SessionSnapshot = {
+  version: 1;
+  lastUpload: {
+    audioId: string;
+    durationSeconds: number;
+    sampleRate: number;
+    channels: number;
+    sizeBytes: number;
+  } | null;
+  transcript: {
+    audioId: string;
+    language?: string;
+    text: string;
+    segments: Array<{ start: number; end: number; text: string }>;
+    durationSeconds: number;
+    processingSeconds: number;
+  } | null;
+  requirement: RequirementResult | null;
+  requirementMeta: { model: string; processingSeconds: number; repaired: boolean } | null;
+  extractAnswers: Record<string, string>;
+  scanResult: ScanResult | null;
+  selectedFiles: string[];
+  relevantResult: RelevantResult | null;
+  generationResult: GenerationResult | null;
+  appliedDiffs: string[];
+  dismissedDiffs: string[];
+  testRunResult: TestRunResult | null;
+  history: SessionHistoryEntry[];
+};
+
+/** One row in the session-history tab. */
+export type SessionMeta = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type HostToWebview =
   | { type: "health"; ok: boolean; version?: string; error?: string; transcription?: string }
   | { type: "pingResult"; reply: string }
@@ -157,7 +217,17 @@ export type HostToWebview =
   | { type: "llmConfigResult"; config: LlmConfigData }
   | { type: "llmConfigSaved"; success: boolean; model: string; provider: string }
   | { type: "llmTestResult"; valid: boolean; message: string; latencyMs: number }
-  | { type: "hostError"; message: string };
+  | { type: "hostError"; message: string }
+  /** Full state after load/new/open/delete: snapshot + history list. */
+  | {
+      type: "sessionState";
+      activeId: string;
+      session: SessionMeta;
+      snapshot: SessionSnapshot;
+      sessions: SessionMeta[];
+    }
+  /** Lightweight refresh after a background save (title list may change). */
+  | { type: "sessionList"; sessions: SessionMeta[] };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */
 export interface VsCodeApi {

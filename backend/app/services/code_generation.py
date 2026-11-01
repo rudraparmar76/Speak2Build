@@ -363,7 +363,7 @@ def run_pytest_on_files(
     """
     if not options.get("include_tests", True):
         return []
-
+    
     workspace_root = _safe_directory(workspace_root)
 
     # Locate Python executable: check workspace virtualenvs first, then current runtime
