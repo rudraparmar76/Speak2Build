@@ -17,3 +17,6 @@ extension/media/webview/
 .vscode-test/
 *.log
 .DS_Store
+
+# Piper voice models (downloaded at first use, ~60 MB per voice)
+backend/models/

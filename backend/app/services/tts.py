@@ -27,8 +27,11 @@ import av
 import numpy as np
 import sounddevice as sd
 
+from app.services import voice_local
+
 VOICE_ENV = "SPEAK2BUILD_TTS_VOICE"
 RATE_ENV = "SPEAK2BUILD_TTS_RATE"
+ENGINE_ENV = voice_local.ENGINE_ENV  # "piper" (default) | "edge"
 
 DEFAULT_VOICE = "en-US-AndrewNeural"
 DEFAULT_RATE = "+0%"
@@ -59,6 +62,7 @@ class SpeakResult:
     sample_rate: int
     voice: str
     rate: str
+    engine: str = "piper"
 
 
 def current_voice() -> tuple[str, str]:
@@ -68,7 +72,7 @@ def current_voice() -> tuple[str, str]:
     return voice, rate
 
 
-async def _default_synthesize(text: str, voice: str, rate: str) -> bytes:
+async def _edge_synthesize(text: str, voice: str, rate: str) -> bytes:
     """Collect the MP3 stream produced by edge-tts for one utterance."""
     import edge_tts  # deferred: keeps import cost off health checks
 
@@ -84,6 +88,25 @@ async def _default_synthesize(text: str, voice: str, rate: str) -> bytes:
     if not data:
         raise SynthesisError("voice provider returned no audio")
     return data
+
+
+async def _hybrid_synthesize(text: str, voice: str, rate: str) -> bytes | tuple[np.ndarray, int]:
+    """Engine selector: local Piper first, cloud edge-tts as fallback.
+
+    'piper' (default): fully offline, ~0.5–1 s synthesis. Any failure
+    (engine missing, voice not downloaded, ONNX error) silently falls back to
+    edge-tts so the user hears a response either way.
+    'edge': force the cloud engine, e.g. to compare voices.
+    """
+    engine = (os.environ.get(ENGINE_ENV) or "piper").strip().lower()
+    if engine != "edge":
+        try:
+            return await voice_local.synthesize_local_async(text, rate=rate)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - local engine is best-effort
+            pass
+    return await _edge_synthesize(text, voice, rate)
 
 
 def _default_decode(mp3_bytes: bytes) -> tuple[np.ndarray, int]:
@@ -137,7 +160,7 @@ class VoiceSpeaker:
         decode=None,
         playback: PlaybackController | None = None,
     ) -> None:
-        self._synthesize = synthesizer or _default_synthesize
+        self._synthesize = synthesizer or _hybrid_synthesize
         self._decode = decode or _default_decode
         self._playback = playback or PlaybackController()
         self._lock = threading.Lock()
@@ -163,10 +186,16 @@ class VoiceSpeaker:
         with self._lock:
             self._utterance_counter += 1
 
-        # Network synthesis first (already async), then decode on a worker
-        # thread so the ~tens-of-ms PCM conversion never blocks the event loop.
-        mp3_bytes = await self._synthesize(text, resolved_voice, resolved_rate)
-        samples, samplerate = await asyncio.to_thread(self._decode, mp3_bytes)
+        # Synthesis: local Piper returns (samples, rate) directly; the cloud
+        # engine returns MP3 bytes that still need decoding.
+        synth_result = await self._synthesize(text, resolved_voice, resolved_rate)
+        used_engine = "edge"
+        if isinstance(synth_result, tuple):
+            samples, samplerate = synth_result
+            used_engine = "piper"
+            resolved_voice = f"piper:{voice_local.resolve_voice_name()}"
+        else:
+            samples, samplerate = await asyncio.to_thread(self._decode, synth_result)
 
         # Non-blocking: PortAudio drives playback on its own thread.
         self._playback.play(samples, samplerate)
@@ -177,6 +206,7 @@ class VoiceSpeaker:
             sample_rate=samplerate,
             voice=resolved_voice,
             rate=resolved_rate,
+            engine=used_engine,
         )
 
 
@@ -206,4 +236,5 @@ __all__ = [
     "DEFAULT_VOICE",
     "VOICE_ENV",
     "RATE_ENV",
+    "ENGINE_ENV",
 ]

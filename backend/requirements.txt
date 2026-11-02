@@ -13,6 +13,8 @@ av<18
 # Backend-owned loudspeakers: Microsoft neural voices (network synthesis),
 # decoded by av into PCM for sounddevice playback.
 edge-tts>=7.0
+# Local offline neural TTS (default engine; edge-tts is only a fallback).
+piper-tts>=1.8
 python-dotenv>=1.0
 pytest>=8.0
 httpx>=0.27

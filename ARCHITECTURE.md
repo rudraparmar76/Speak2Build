@@ -35,12 +35,23 @@
 | `extension/src/providers/sidebarPanel.ts` | Webview lifecycle; generates HTML with CSP + per-render nonce; routes `WebviewToHost` messages to services; posts `HostToWebview` results back |
 | `extension/src/services/backendClient.ts` | All backend HTTP access; 5s timeout via `AbortController`; maps connection/HTTP/timeout errors to human-readable strings |
 | `extension/src/types/messages.ts` | The webview↔host message contract: typed unions `WebviewToHost` and `HostToWebview` (single source of truth) |
+| `extension/src/services/sessionStore.ts` | Host-owned session persistence over `workspaceState` (per-workspace, capped at 20): ensureActive/create/save/open/delete; debounced snapshot autosave |
+
+### Voice Output (backend, python, M7)
+
+| File | Responsibility |
+|---|---|
+| `backend/app/services/tts.py` | `VoiceSpeaker` (utterance serialization + decode + playback) and `PlaybackController` (sounddevice); `_hybrid_synthesize` engine selector: local Piper first, edge-tts fallback; errors mapped to 502 (synthesis) / 503 (playback) |
+| `backend/app/services/voice_local.py` | Offline Piper engine: ONNX voice cached under `backend/models/piper/` (auto-downloaded on first use), lazy singleton load, converts text → float32 samples + sample rate directly (no MP3 decode step) |
+| `backend/app/schemas/tts.py` | `SpeakRequest` (text length-capped), `SpeakResponse` (includes `engine`), `StopResponse` |
+
+Engine selection: `SPEAK2BUILD_TTS_ENGINE` = `piper` (default, fully offline, ~0.1–0.4 s warm synthesis) or `edge` (Microsoft cloud neural voices via edge-tts). Piper failure never breaks the user experience — it silently falls back to edge-tts. Piper voice: `SPEAK2BUILD_TTS_PIPER_VOICE` (default `en_US-lessac-medium`). `/api/health` reports the active engine in the `tts` field.
 
 ### Speech Recognition (backend, python)
 
 | File | Responsibility |
 |---|---|
-| `backend/app/services/transcription.py` | faster-whisper service: env-configured model (`SPEAK2BUILD_WHISPER_MODEL`, default `small`, device `cpu`, compute `int8`), background warm-up on first health probe, state machine `idle/loading/ready/error` surfaced via `/api/health`, `transcribe(path)` returning language + segments |
+| `backend/app/services/transcription.py` | faster-whisper service: env-configured model (`SPEAK2BUILD_WHISPER_MODEL`, default `base`, device `cpu`, compute `int8`), background warm-up on first health probe, state machine `idle/loading/ready/error` surfaced via `/api/health`, `transcribe(path)` returning language + segments |
 | `backend/app/schemas/transcription.py` | `TranscribeRequest` (regex-validated audio_id), `TranscriptSegment`, `TranscriptionResponse` |
 
 Pin note: `av<18` — faster-whisper 1.2.1 calls `av.open(..., metadata_errors=...)`, removed in av 18+.
@@ -102,7 +113,7 @@ postMessage(hostError)    ◀───  caught error, mapped to text
 ## API Contract
 
 ### `GET /api/health`
-Response `200`: `{ "status": "ok", "version": "0.1.0" }`
+Response `200`: `{ "status": "ok", "version": "0.1.0", "transcription": "idle|loading|ready|error", "tts": "piper|edge" }`
 
 ### `POST /api/ping`
 Request: `{ "message": string (1–2000 chars) }` → `422` if invalid.
@@ -134,6 +145,22 @@ magic + fmt chunk checks → `415`; empty → `400`. Stored at
 handle, and `audio_store.path_for()` re-validates its format before any path
 construction. Response `201`: `AudioUploadResponse` (id, duration, rate,
 channels, size).
+
+### `POST /api/tts/play` (M7)
+Request: `{ "text": string (≤ 2000 chars), "voice"?: string, "rate"?: string }`.
+Synthesizes with the active engine and starts playback (non-blocking; a new
+play implicitly replaces the previous one). Response `200`:
+`{ played: true, characters, duration_seconds, sample_rate, voice, rate, engine }`.
+Errors: `502` synthesis failed (both engines), `503` no usable output device.
+
+### `POST /api/tts/stop` (M7)
+Stops playback immediately. Response `200`: `{ stopped: bool, interrupted_chars: int }`.
+
+### `POST /api/requirements/map-answers` (M7)
+Request: `{ "requirement": object, "questions": string[], "transcript": string }`.
+The LLM maps one rambling spoken reply onto every open question (empty string
+where not addressed), with a JSON-repair loop. Response `200`:
+`{ "answers": string[] (same order/length as questions) }`.
 
 ## Webview Recording Pipeline (Milestone 1, revised)
 

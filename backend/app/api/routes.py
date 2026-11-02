@@ -83,12 +83,15 @@ def health() -> HealthResponse:
 
     The `transcription` field reports the STT model state machine so the
     sidebar and operators can tell 'ready' apart from 'still loading'.
+    The `tts` field reports the active voice engine (piper | edge).
     """
     transcription_service.request_warmup()
+    engine = (os.environ.get(tts_service.ENGINE_ENV) or "piper").strip().lower()
     return HealthResponse(
         status="ok",
         version=API_VERSION,
         transcription=transcription_service.state(),
+        tts=engine,
     )
 
 
@@ -508,6 +511,7 @@ async def speak_aloud(payload: SpeakRequest) -> SpeakResponse:
         sample_rate=started.sample_rate,
         voice=started.voice,
         rate=started.rate,
+        engine=started.engine,
     )
 
 

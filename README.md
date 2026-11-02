@@ -24,6 +24,9 @@ Speak → Transcribe → Understand → Clarify → Inspect Project
 | 4 | Project context scanning, relevance scoring, bounded snippets | ✅ Done |
 | 5 | Code generation (unified diff patches with validation) | ✅ Done |
 | 6 | Diff review, approve/reject, patch apply, validation | ✅ Done |
+| 6.5 | Session persistence + history tab | ✅ Done |
+| 7 (voice) | Backend TTS · voice answers to clarifications · local voice stack | ✅ Done |
+| 7 (voice, next) | Barge-in · voice commands · spoken fix-it loop | Next |
 | 7 | Evaluation suite (20 tasks) + metrics + demo | Planned |
 
 See `DEVELOPMENT_LOG.md` for details and `ARCHITECTURE.md` for design.
@@ -32,7 +35,8 @@ See `DEVELOPMENT_LOG.md` for details and `ARCHITECTURE.md` for design.
 
 - **Extension:** TypeScript, React 18, VS Code Webview API, esbuild
 - **Backend:** Python 3.12+, FastAPI, Pydantic v2, uvicorn
-- **Speech:** faster-whisper (local STT, model configurable via env)
+- **Speech-to-text:** faster-whisper (local STT, model configurable via env; default `base` int8 CPU)
+- **Text-to-speech:** Piper local neural TTS (offline ONNX, voice cached once under `backend/models/piper/`) with edge-tts cloud fallback
 - **LLM:** provider configured via environment variables (from Milestone 3; no keys ever hardcoded)
 
 ## Prerequisites
@@ -133,6 +137,11 @@ npm run typecheck    # tsc --noEmit
   faster-whisper versions can move under us); consecutive-speech dictation works fine without it.
 - One active recording session at a time (single global mic session).
 - Recordings cap at 120 seconds; no chunked upload for longer sessions yet.
+- Voice output speaks through the backend's own speakers on the machine running
+  uvicorn — a remote backend would speak there, not where VS Code runs.
+- First use of the local Piper voice downloads ~60 MB once; after that it is
+  fully offline. Setting `SPEAK2BUILD_TTS_ENGINE=edge` falls back to the
+  Microsoft cloud voices (requires internet).
 - The backend has no authentication — it is intentionally loopback-only.
 - Temp recordings accumulate; a store TTL/cleanup sweep is still pending.
 - Code generation validation: TypeScript validation requires `npx tsc` in PATH;

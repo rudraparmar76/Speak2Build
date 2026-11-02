@@ -37,6 +37,7 @@ class SpeakResponse(BaseModel):
     sample_rate: int
     voice: str
     rate: str
+    engine: str = "piper"
 
 
 class StopSpeakResponse(BaseModel):

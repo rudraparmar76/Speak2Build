@@ -1,5 +1,82 @@
 # Speak2Build — Development Log
 
+## Milestone 7 — Voice Interfaces ✅ (parts 1–2 + local voice stack; barge-in & voice commands next)
+
+**Goal:** the conversation no longer requires a keyboard at any point: the
+backend speaks its questions and verdicts aloud (part 1), the developer *answers
+clarifying questions by voice* — one spoken take mapped onto every open question
+(part 2) — and the whole voice stack runs locally with cloud only as a fallback
+(optimization).
+
+### Completed
+
+- **Part 1 — spoken output** (`ac9d3f0`): `services/tts.py`
+  (`VoiceSpeaker` + `PlaybackController`, injectable fakes for tests),
+  `schemas/tts.py`, `POST /api/tts/play` + `POST /api/tts/stop`
+  (502 synthesis / 503 playback mapping), 13 tests. Extension: 🔈 mute toggle,
+  "■ Stop voice" bar, auto-speak of clarifications, generation summaries, and
+  test verdicts. Live-verified: spoken aloud, stop cut playback mid-sentence.
+- **Part 2 — voice answers** (`943c142`): `services/voice_answers.py`
+  (`VoiceAnswerMapper` with JSON-repair loop), `schemas/voice_answers.py`,
+  `POST /api/requirements/map-answers`, 12 tests. Extension flow:
+  🎤 Answer all by voice → record → transcribe → map every question →
+  `answersMapped` merges into `extractAnswers` → auto re-extract. Live probe: a
+  rambling spoken reply was mapped to "SQLite" / "yes" in 11.2 s (NVIDIA).
+- **Voice-stack optimization** (this change): switched the default TTS engine to
+  **Piper** (`piper-tts`, ONNX on CPU, fully offline) and cut default STT from
+  whisper `small` to `base` (int8). New `services/voice_local.py`:
+  - Voice cached under `backend/models/piper/` (git-ignored), auto-downloaded on
+    first use (~60 MB, one-time); lazy singleton load guarded by a thread lock.
+  - `synthesize_local()` returns `(float32 samples, sample_rate)` directly —
+    piped straight to sounddevice, skipping the edge path's MP3-decode step.
+  - `'+15%'`-style rates map to Piper `length_scale`; service errors never
+    surface — `_hybrid_synthesize` silently falls back to edge-tts.
+  - `/api/health` now reports the active engine (`tts: piper | edge`);
+    `/api/tts/play` responses report the real engine + voice
+    (`piper:en_US-lessac-medium`) and a new `engine` field.
+
+### Technical Decisions
+
+- **Piper over Kokoro** (Kokoro was the original plan): Kokoro's quality edge
+  requires PyTorch, which does not install cleanly on Python 3.14 and drags in
+  ~2 GB. Piper is pure onnxruntime, meets the same goals (offline,
+  deployment-safe, fast), and streams per sentence — useful for future
+  streaming playback.
+- **Hybrid, not exclusive:** `SPEAK2BUILD_TTS_ENGINE=piper` is the default but
+  `edge` remains reachable, so OSS safety concerns never turn into "no voice".
+- **STT `small` → `base`:** transcription was 4–5 s of the turn; `base` int8 is
+  ~1–2 s. Both remain env-configurable (`SPEAK2BUILD_WHISPER_MODEL`).
+
+### Verification Performed
+
+- Probe script: first synthesis 26.8 s (one-time download + warm load) →
+  4.11 s of audio; steady state **0.08 s** for 1.59 s of speech.
+- Live end-to-end via `/api/tts/play`: cold 5.9 s (in-process ONNX load),
+  warm **369 ms**, `engine: piper`, `voice: piper:en_US-lessac-medium`,
+  22050 Hz — audio played through the machine's speakers offline.
+- Backend: **125/125 tests green** (8 new in `tests/test_voice_local.py`:
+  rate mapping, engine selection, edge-fallback, cancellation passthrough,
+  predecoded-audio speaker path). Extension typecheck + build clean.
+
+### Bugs & Fixes
+
+- A test showed `_rate_to_length_scale` rounding to 4 decimals (0.8696 vs
+  0.869565…); loosened the test tolerance to `abs=1e-3` instead of weakening
+  the implementation.
+- During sidebar edits the `stopSpeaking` message case was briefly clobbered by
+  an edit that swallowed its next line — caught immediately and restored; a
+  reminder to always read back edited switch statements (same failure mode as
+  the earlier `testLlmConfig` incident).
+
+### Next Steps
+
+1. **Part 3 — barge-in:** VAD on the backend mic during playback → incoming
+   speech stops the voice and opens a listening window.
+2. **Part 4 — voice commands:** "apply it" / "revert" / "run tests" / "new
+   session" spoken directly, plus a spoken "tests failed — fix?" auto-repair
+   loop.
+3. Part 7 — evaluation suite (20 tasks), metrics, demo.
+
 ## Milestone 6.5 — Session Persistence & History ✅
 
 **Goal:** the sidebar stops forgetting its work. When the user switches focus (or
