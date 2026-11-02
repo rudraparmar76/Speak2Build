@@ -42,7 +42,8 @@ RULES:
 - New files: set is_new_file = true.
 - Modified files: set is_new_file = false.
 - Max 5 files. Prefer fewer, focused changes.
-- Include tests if option.include_tests is true (default: true).
+- MANDATORY TEST COVERAGE: You MUST always generate or update a corresponding test file alongside implementation files (e.g. `*.test.js`/`*.test.tsx` for React/Jest, `test_*.py` for Python, `*_test.go` for Go, `tests/*.rs` for Rust). Match the project's testing framework and conventions exactly.
+- If the project has a manifest (like package.json, pyproject.toml, Cargo.toml), use the exact testing libraries and scripts specified therein.
 - Follow the project's existing patterns exactly.
 - Use proper indentation (4 spaces for Python).
 
@@ -57,6 +58,42 @@ JSON SCHEMA:
     }
   ],
   "summary": "One-sentence summary of what was created/changed"
+}
+"""
+
+REPAIR_SYSTEM_PROMPT = """\
+You are an expert debugger and senior software engineer.
+Your job is to fix failing tests by analyzing the test failure output and editing the code or tests.
+
+You will receive:
+1. The original requirement
+2. The failing test output with assertion errors and stack traces
+3. Relevant context snippets from the codebase
+4. Options
+
+Your job: produce a JSON object with a "files" array containing the COMPLETE, FIXED file contents and a "summary".
+
+RULES:
+- Output ONLY valid JSON (no markdown fences, no commentary).
+- Each file entry must contain the COMPLETE, FINAL content of the file.
+- Inspect the failing test output carefully: fix the exact root cause of the failed assertions.
+- Modify existing files with precision: do NOT rewrite unrelated code or break existing functionality.
+- For modified files: set is_new_file = false.
+- For new files (if needed): set is_new_file = true.
+- Max 5 files. Prefer minimal, surgical fixes.
+- Return ONLY the JSON object.
+
+JSON SCHEMA:
+{
+  "files": [
+    {
+      "path": "relative/path/to/file.js",
+      "language": "javascript",
+      "content": "... complete fixed file content ...",
+      "is_new_file": false
+    }
+  ],
+  "summary": "One-sentence explanation of the fix applied"
 }
 """
 
@@ -437,44 +474,105 @@ def run_pytest_on_files(
         return ["pytest not available in environment"]
 
     # Create a temporary workspace with the generated files
+    # Create a temporary workspace with the generated files
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
 
-        # Copy existing project files (for imports to work)
-        # Only copy Python files to keep it fast
-        for py_file in workspace_root.rglob("*.py"):
+        # Copy existing project files (Python code and assets like HTML, CSS, configs)
+        # so relative imports, template lookups, and static assets work in tests.
+        ASSET_EXTS = {
+            ".py", ".html", ".htm", ".css", ".js", ".mjs", ".ts", ".tsx",
+            ".json", ".yaml", ".yml", ".toml", ".txt", ".csv", ".sql", ".xml"
+        }
+        for file_path in workspace_root.rglob("*"):
+            if not file_path.is_file():
+                continue
+            if file_path.suffix.lower() not in ASSET_EXTS:
+                continue
             try:
-                rel = py_file.relative_to(workspace_root)
-                # Skip test files, cache, and generated files
+                rel = file_path.relative_to(workspace_root)
+                # Skip dot directories (.git, .venv, etc.) and heavy build caches
                 if any(part.startswith(".") for part in rel.parts):
                     continue
-                if rel.parts[0] in ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"):
+                if rel.parts[0] in ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", "dist", "build"):
+                    continue
+                # Skip huge files (> 500KB)
+                if file_path.stat().st_size > 500_000:
                     continue
                 dst = tmp_path / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.write_text(read_file_safe(py_file), encoding="utf-8")
+                dst.write_text(read_file_safe(file_path), encoding="utf-8")
             except (OSError, ValueError):
                 continue
 
-        # Write generated files
+        # Write ALL generated files (HTML, Python, CSS, JS, etc.) to the sandbox
         for gf in generated_files:
-            if gf.language != "python":
-                continue
             dst = tmp_path / gf.path
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(gf.content, encoding="utf-8")
 
-        # Run pytest on test files only
+        # Run pytest on Python test files
         test_files = [str(tmp_path / gf.path) for gf in generated_files
                       if gf.language == "python" and "test" in gf.path]
 
         if not test_files:
-            # No test files generated, look for existing test files that might be affected
+            # No Python test files generated, look for existing test files that might be affected
             test_files = list(tmp_path.rglob("test_*.py")) + list(tmp_path.rglob("*_test.py"))
             test_files = [str(f) for f in test_files[:5]]  # Limit to first 5
 
+        # Check for JavaScript/TypeScript test files if no Python tests exist
+        js_test_files = []
         if not test_files:
+            for gf in generated_files:
+                if gf.path.endswith((".test.js", ".spec.js", ".test.mjs", ".test.ts", ".test.tsx", ".spec.ts")) or ("test" in gf.path.lower() and gf.path.endswith((".js", ".mjs"))):
+                    js_test_files.append(str(tmp_path / gf.path))
+
+        if not test_files and not js_test_files:
             return []  # No tests to run
+
+        # Execute JavaScript tests via node --test if available.
+        # IMPORTANT: Bare `node --test` cannot handle JSX/React syntax, TypeScript,
+        # or projects that use Jest/Vitest/Mocha test runners. Only use it for
+        # pure vanilla JS test files with no build toolchain.
+        if js_test_files and not test_files:
+            # Skip `node --test` entirely when the workspace uses a proper test
+            # runner (npm/jest/vitest) -- those tests will be validated via the
+            # workspace test runner (run_workspace_tests) instead.
+            has_package_json = (workspace_root / "package.json").is_file()
+            if has_package_json:
+                # Project has a Node.js build/test toolchain; sandbox `node --test`
+                # would fail on JSX, TypeScript, aliased imports, etc.
+                return []
+
+            # Even without package.json, check for React/JSX/TS patterns in the
+            # generated test files themselves.
+            jsx_indicators = ("react", "@testing-library", "from 'react", 'from "react',
+                              "import React", "render(", "<", ".tsx", ".ts")
+            has_jsx = any(
+                any(indicator in gf.content for indicator in jsx_indicators)
+                for gf in generated_files
+                if str(tmp_path / gf.path) in js_test_files
+            )
+            if has_jsx:
+                return []
+
+            node_bin = shutil.which("node")
+            if not node_bin:
+                return []
+            try:
+                js_result = subprocess.run(
+                    [node_bin, "--test"] + js_test_files,
+                    capture_output=True, text=True, timeout=30, cwd=tmp_path
+                )
+                if js_result.returncode != 0:
+                    out = js_result.stdout + "\n" + js_result.stderr
+                    # Catch any remaining JSX/module errors gracefully
+                    if "Unexpected token" in out or "Cannot find module" in out:
+                        return []
+                    return [f"JS Test failures:\n{out[:2000]}"]
+                return []
+            except Exception as e:
+                return []
 
         try:
             # Run pytest with short timeout
@@ -798,8 +896,28 @@ class CodeGenerationService:
         started = time.monotonic()
         workspace_root = _safe_directory(workspace_root)
 
+        # Ensure essential manifests (package.json, pyproject.toml, etc.) are present
+        existing_paths = {s.get("path") for s in context_snippets}
+        augmented_snippets = list(context_snippets)
+        try:
+            from app.services.project_context import find_essential_manifests
+            for m_name in find_essential_manifests(workspace_root):
+                if m_name not in existing_paths:
+                    m_path = workspace_root / m_name
+                    if m_path.is_file():
+                        m_content = read_file_safe(m_path)[:3000]
+                        augmented_snippets.insert(0, {
+                            "path": m_name,
+                            "language": "json" if m_name.endswith(".json") else "toml",
+                            "content": m_content,
+                            "start_line": 1,
+                            "end_line": len(m_content.splitlines()),
+                        })
+        except Exception:
+            pass
+
         # Build context summary for prompt
-        context_summary = self._build_context_summary(context_snippets)
+        context_summary = self._build_context_summary(augmented_snippets)
 
         user_prompt = f"""REQUIREMENT:
 {requirement_text}
@@ -906,6 +1024,132 @@ Return ONLY the JSON object with files and summary. Do NOT use markdown fences.
             f"Last validation errors: {feedback}"
         )
 
+
+    def repair(
+        self,
+        requirement_text: str,
+        failed_test_output: str,
+        context_snippets: list[dict],
+        options: dict,
+        workspace_root: Path,
+        framework: Optional[str] = None,
+    ) -> GenerationOutcome:
+        started = time.monotonic()
+        workspace_root = _safe_directory(workspace_root)
+
+        # Include manifests if available
+        existing_paths = {s.get("path") for s in context_snippets}
+        augmented_snippets = list(context_snippets)
+        try:
+            from app.services.project_context import find_essential_manifests
+            for m_name in find_essential_manifests(workspace_root):
+                if m_name not in existing_paths:
+                    m_path = workspace_root / m_name
+                    if m_path.is_file():
+                        m_content = read_file_safe(m_path)[:3000]
+                        augmented_snippets.insert(0, {
+                            "path": m_name,
+                            "language": "json" if m_name.endswith(".json") else "toml",
+                            "content": m_content,
+                            "start_line": 1,
+                            "end_line": len(m_content.splitlines()),
+                        })
+        except Exception:
+            pass
+
+        context_summary = self._build_context_summary(augmented_snippets)
+
+        user_prompt = f"""REQUIREMENT:
+{requirement_text}
+
+FAILING TEST OUTPUT:
+{failed_test_output}
+
+CONTEXT SNIPPETS:
+{context_summary}
+
+OPTIONS:
+{json.dumps(options, indent=2)}
+
+Analyze the failed assertions and fix the code to make the tests pass.
+Return ONLY the JSON object with the fixed files and summary.
+"""
+
+        feedback: Optional[str] = None
+        for attempt in range(1, self._max_attempts + 1):
+            attempt_prompt = user_prompt
+            if feedback:
+                attempt_prompt = (
+                    f"{user_prompt}\n\nPREVIOUS REPAIR ATTEMPT FAILED VALIDATION:\n"
+                    f"{feedback}\n\nFix the issues and return ONLY corrected JSON."
+                )
+
+            raw = self._llm.complete(REPAIR_SYSTEM_PROMPT, attempt_prompt)
+            try:
+                generated_files, summary = _parse_file_generation(raw)
+
+                all_errors: list[str] = []
+                diffs: list[FileDiff] = []
+
+                for gf in generated_files:
+                    content_errors = validate_file_content(
+                        gf.content, gf.path, gf.language, workspace_root,
+                    )
+                    all_errors.extend(content_errors)
+
+                    full_path = workspace_root / gf.path
+                    if gf.is_new_file or not full_path.exists():
+                        old_content = ""
+                        is_new = True
+                    else:
+                        old_content = read_file_safe(full_path)
+                        is_new = False
+
+                    unified_diff = compute_unified_diff(
+                        old_content, gf.content, gf.path, is_new,
+                    )
+
+                    if not unified_diff:
+                        continue
+
+                    diff_obj = FileDiff(
+                        path=gf.path,
+                        language=gf.language,
+                        unified_diff=unified_diff,
+                        is_new_file=is_new,
+                    )
+                    diffs.append(diff_obj)
+
+                    if is_new or _is_utf8_on_disk(full_path):
+                        apply_errors = validate_diff_applies(unified_diff, workspace_root)
+                        all_errors.extend(apply_errors)
+
+                if not diffs:
+                    all_errors.append("No file changes produced in repair")
+
+                if not all_errors:
+                    test_errors = run_pytest_on_files(generated_files, workspace_root, options)
+                    return GenerationOutcome(
+                        diffs=diffs,
+                        summary=f"[Auto-Repair] {summary}",
+                        model=self._model_name,
+                        processing_seconds=time.monotonic() - started,
+                        validated=True,
+                        validation_errors=[],
+                        test_errors=test_errors,
+                        tests_passed=len(test_errors) == 0,
+                    )
+
+                if all_errors:
+                    feedback = "\n".join(all_errors)
+            except Exception as e:
+                feedback = str(e)
+
+        raise CodeGenerationError(
+            f"Failed to auto-repair code after {self._max_attempts} attempts. "
+            f"Last errors: {feedback}"
+        )
+
     def _build_context_summary(self, snippets: list[dict]) -> str:
         if not snippets:
             return "(no context provided)"
@@ -935,6 +1179,31 @@ def generate_code(
 def is_configured() -> bool:
     from app.services.llm_client import load_config_from_env
     return bool(load_config_from_env().model)
+
+
+
+def repair_code(
+    requirement_text: str,
+    failed_test_output: str,
+    context_snippets: list[dict],
+    options: dict,
+    workspace_root: str,
+    framework: Optional[str] = None,
+) -> GenerationOutcome:
+    from app.services.llm_client import load_config_from_env, OpenAICompatibleLLM
+
+    config = load_config_from_env()
+    if not config.model:
+        raise LLMUnavailableError("No LLM model configured.")
+    service = CodeGenerationService(OpenAICompatibleLLM(config), config.model)
+    return service.repair(
+        requirement_text=requirement_text,
+        failed_test_output=failed_test_output,
+        context_snippets=context_snippets,
+        options=options,
+        workspace_root=Path(workspace_root),
+        framework=framework,
+    )
 
 
 __all__ = [

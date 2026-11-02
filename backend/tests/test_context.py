@@ -52,6 +52,35 @@ def test_scan_workspace_detects_languages_and_tree():
         shutil.rmtree(ws, ignore_errors=True)
 
 
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+
 def test_scan_workspace_respects_max_files():
     ws = _make_temp_workspace({f"file{i}.py": "x=1" for i in range(100)})
     try:
@@ -60,6 +89,35 @@ def test_scan_workspace_respects_max_files():
     finally:
         import shutil
         shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
 
 
 def test_score_relevance_path_overlap():
@@ -100,6 +158,35 @@ def test_extract_snippet_small_file():
         shutil.rmtree(ws, ignore_errors=True)
 
 
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+
 def test_extract_snippet_large_file_truncates():
     lines = [f"line {i}" for i in range(500)]
     ws = _make_temp_workspace({"large.py": "\n".join(lines)})
@@ -114,6 +201,63 @@ def test_extract_snippet_large_file_truncates():
     finally:
         import shutil
         shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
 
 
 def test_select_relevant_files_scores_and_bounds():
@@ -174,6 +318,35 @@ def test_select_relevant_files_scores_and_bounds():
         shutil.rmtree(ws, ignore_errors=True)
 
 
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+
 def test_select_relevant_files_respects_char_budget():
     ws = _make_temp_workspace({
         "a.py": "x = 1\n" * 500,
@@ -192,6 +365,35 @@ def test_select_relevant_files_respects_char_budget():
         shutil.rmtree(ws, ignore_errors=True)
 
 
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+
 def test_select_relevant_files_rejects_outside_workspace():
     ws = _make_temp_workspace({"inside.py": "print('hi')"})
     try:
@@ -205,6 +407,35 @@ def test_select_relevant_files_rejects_outside_workspace():
     finally:
         import shutil
         shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+
 
 
 def test_select_relevant_files_empty_requirement():
@@ -227,3 +458,32 @@ def test_select_relevant_files_empty_requirement():
     finally:
         import shutil
         shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_find_essential_manifests_and_paired_tests():
+    ws = _make_temp_workspace({
+        "package.json": '{"name": "test-pkg", "scripts": {"test": "jest"}}',
+        "src/Game.js": "export default function Game() {}",
+        "src/Game.test.js": "test('game', () => {});",
+    })
+    try:
+        manifests = ctx.find_essential_manifests(ws)
+        assert "package.json" in manifests
+
+        paired = ctx.find_paired_test_files(["src/Game.js"], ws)
+        assert "src/Game.test.js" in paired
+
+        # Verify select_relevant_files includes package.json and Game.test.js even if only Game.js was passed
+        snippets, _ = ctx.select_relevant_files(
+            requirement_text="add score to game",
+            file_paths=["src/Game.js"],
+            workspace_root=ws,
+        )
+        paths = [s["path"] for s in snippets]
+        assert "src/Game.js" in paths
+        assert "package.json" in paths
+        assert "src/Game.test.js" in paths
+    finally:
+        import shutil
+        shutil.rmtree(ws, ignore_errors=True)
+

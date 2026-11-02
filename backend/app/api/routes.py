@@ -28,6 +28,8 @@ from app.schemas.context import (
     ScanResponse,
 )
 from app.schemas.generation import (
+    RepairRequest,
+    RepairResponse,
     ApplyDiffRequest,
     ApplyDiffResponse,
     FileDiff,
@@ -42,7 +44,15 @@ from app.schemas.transcription import (
     TranscriptionResponse,
     TranscriptSegment,
 )
-from app.schemas.validation import TestRunRequest, TestRunResponse
+from app.schemas.validation import (
+    TestFrameworkDetectResponse,
+    TestRunRequest,
+    TestRunResponse,
+)
+from app.schemas.voice_commands import (
+    CommandClassifyRequest,
+    CommandClassifyResponse,
+)
 from app.schemas.voice_answers import (
     MapAnswersRequest,
     MapAnswersResponse,
@@ -58,6 +68,7 @@ from app.services import code_generation as generation_service
 from app.services import validation as validation_service
 from app.services import tts as tts_service
 from app.services import voice_answers as voice_answers_service
+from app.services import voice_commands as commands_service
 from app.services.llm_client import (
     LLMRequestError,
     LLMUnavailableError,
@@ -455,20 +466,37 @@ def revert_diff(payload: RevertDiffRequest) -> RevertDiffResponse:
         raise HTTPException(status_code=500, detail=f"Revert failed: {exc}") from exc
 
 
+@router.get("/api/validate/detect", response_model=TestFrameworkDetectResponse)
+def detect_tests(workspace_root: str) -> TestFrameworkDetectResponse:
+    """Detect testing framework for a workspace root."""
+    try:
+        root = Path(workspace_root).resolve()
+        if not root.exists() or not root.is_dir():
+            raise HTTPException(status_code=400, detail="Workspace root directory does not exist")
+        fw_id, fw_name = validation_service.detect_test_framework(root)
+        return TestFrameworkDetectResponse(framework=fw_id, name=fw_name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Framework detection failed: {exc}") from exc
+
+
 @router.post("/api/validate/tests", response_model=TestRunResponse)
 def run_tests(payload: TestRunRequest) -> TestRunResponse:
-    """Run pytest in the workspace and report results."""
+    """Run tests in the workspace with auto-detected or specified framework."""
     try:
         workspace_root = Path(payload.workspace_root).resolve()
         if not workspace_root.exists() or not workspace_root.is_dir():
             raise HTTPException(status_code=400, detail="Workspace root directory does not exist")
-        outcome = validation_service.run_pytest(
+        outcome = validation_service.run_workspace_tests(
             workspace_root=workspace_root,
             test_path=payload.test_path,
             timeout_seconds=payload.timeout_seconds,
+            framework=payload.framework,
         )
         return TestRunResponse(
             success=outcome.success,
+            framework=outcome.framework,
             passed=outcome.passed,
             failed=outcome.failed,
             errors=outcome.errors,
@@ -549,3 +577,71 @@ def map_spoken_answers(payload: MapAnswersRequest) -> MapAnswersResponse:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except voice_answers_service.AnswerMappingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Spoken voice commands (Milestone 7, part 4)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/commands/classify", response_model=CommandClassifyResponse)
+def classify_command(payload: CommandClassifyRequest) -> CommandClassifyResponse:
+    """Classify spoken transcript into an actionable voice command."""
+    match = commands_service.classify_voice_command(payload.transcript)
+    return CommandClassifyResponse(
+        is_command=match.is_command,
+        action=match.action,
+        confidence=match.confidence,
+        feedback_speech=match.feedback_speech,
+    )
+
+
+@router.post("/api/repair", response_model=RepairResponse)
+def repair_code_endpoint(payload: RepairRequest) -> RepairResponse:
+    """Generate auto-repair diffs for failing tests using LLM guidance."""
+    if not generation_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="No LLM configured. Set SPEAK2BUILD_LLM_MODEL and restart backend.",
+        )
+
+    if payload.workspace_root:
+        workspace_root = Path(payload.workspace_root).resolve()
+    else:
+        workspace_root = Path.cwd()
+
+    if not workspace_root.is_dir():
+        if workspace_root.is_file():
+            workspace_root = workspace_root.parent
+        else:
+            workspace_root = Path.cwd()
+
+    try:
+        outcome = generation_service.repair_code(
+            requirement_text=payload.requirement_text,
+            failed_test_output=payload.failed_test_output,
+            context_snippets=payload.context_snippets,
+            options=payload.options,
+            workspace_root=str(workspace_root),
+            framework=payload.framework,
+        )
+    except LLMUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}") from exc
+    except generation_service.CodeGenerationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Auto-repair failed: {exc}") from exc
+
+    return RepairResponse(
+        diffs=outcome.diffs,
+        summary=outcome.summary,
+        model=outcome.model,
+        processing_seconds=outcome.processing_seconds,
+        validated=outcome.validated,
+        validation_errors=outcome.validation_errors,
+        test_errors=outcome.test_errors or [],
+        tests_passed=outcome.tests_passed,
+        repaired=True,
+    )

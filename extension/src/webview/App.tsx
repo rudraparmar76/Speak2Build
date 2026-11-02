@@ -163,7 +163,21 @@ export function App() {
   const [dismissedDiffs, setDismissedDiffs] = useState<Set<string>>(new Set());
   const [runningTests, setRunningTests] = useState(false);
   const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
+  const [testFramework, setTestFramework] = useState<{ framework: string; name: string }>({
+    framework: "auto",
+    name: "pytest",
+  });
   const revertingDiffRef = useRef<string | null>(null);
+const generationResultRef = useRef<GenerationResult | null>(null);
+  generationResultRef.current = generationResult;
+  const appliedDiffsRef = useRef<Set<string>>(new Set());
+  appliedDiffsRef.current = appliedDiffs;
+  const testRunResultRef = useRef<TestRunResult | null>(null);
+  testRunResultRef.current = testRunResult;
+  const requirementRef = useRef<RequirementResult | null>(null);
+  requirementRef.current = requirement;
+  const relevantResultRef = useRef<RelevantResult | null>(null);
+  relevantResultRef.current = relevantResult;
 
   // In-UI LLM Settings modal
   const [showSettings, setShowSettings] = useState(false);
@@ -382,7 +396,19 @@ export function App() {
           setScanResult(message.result);
           setSelectedFiles(new Set());
           setRelevantResult(null);
+          const langs = message.result.languages || [];
+          if (!langs.includes("python") && (langs.includes("typescript") || langs.includes("javascript"))) {
+            setTestFramework({ framework: "npm", name: "npm test" });
+          } else if (langs.includes("rust")) {
+            setTestFramework({ framework: "cargo", name: "cargo test" });
+          } else if (langs.includes("go")) {
+            setTestFramework({ framework: "go", name: "go test" });
+          }
           pushHistory(`Workspace scanned: ${message.result.languages.join(", ")} · ${message.result.scannedFiles} files`);
+          break;
+        }
+        case "testFrameworkDetected": {
+          setTestFramework({ framework: message.framework, name: message.name });
           break;
         }
         case "contextRelevant": {
@@ -448,15 +474,47 @@ export function App() {
           }
           break;
         }
+case "voiceCommandExecuted": {
+          pushHistory(`🎙️ Voice Command: ${message.action} ("${message.feedbackSpeech}")`);
+          if (message.action === "apply") {
+            const gen = generationResultRef.current;
+            const applied = appliedDiffsRef.current;
+            if (gen && gen.diffs) {
+              const pending = gen.diffs.filter((d) => !applied.has(d.unifiedDiff));
+              for (const diff of pending) {
+                applyDiffRef.current(diff.unifiedDiff);
+              }
+            }
+          } else if (message.action === "revert") {
+            const gen = generationResultRef.current;
+            const applied = appliedDiffsRef.current;
+            if (gen && gen.diffs) {
+              const toRevert = gen.diffs.filter((d) => applied.has(d.unifiedDiff));
+              for (const diff of toRevert) {
+                revertDiffRef.current(diff.unifiedDiff);
+              }
+            }
+          } else if (message.action === "run_tests") {
+            runWorkspaceTestsRef.current();
+          } else if (message.action === "repair") {
+            triggerAutoRepairRef.current();
+          } else if (message.action === "new_session") {
+            createNewSessionRef.current();
+          }
+          break;
+        }
         case "testRunResult": {
           setRunningTests(false);
           setTestRunResult(message.result);
+          if (message.result.framework) {
+            setTestFramework((prev) => ({ ...prev, name: message.result.framework || prev.name }));
+          }
           pushHistory(`Tests: ${message.result.summary}`);
           if (message.result.total > 0) {
             speakText(
               message.result.success
                 ? `All good. ${message.result.summary}`
-                : `Tests did not pass. ${message.result.summary}`,
+                : `Tests did not pass. ${message.result.summary}. Say fix it or click auto repair.`,
             );
           }
           break;
@@ -560,6 +618,7 @@ export function App() {
     vscode.postMessage({ type: "getLlmConfig" });
     // Restore the active session when the webview has been rebuilt.
     vscode.postMessage({ type: "loadSessionState" });
+    vscode.postMessage({ type: "detectTestFramework" });
   }, []);
 
   // Re-apply a host-provided snapshot into the UI. Used after fresh boot,
@@ -578,6 +637,26 @@ export function App() {
     setAppliedDiffs(new Set(snap.appliedDiffs ?? []));
     setDismissedDiffs(new Set(snap.dismissedDiffs ?? []));
     setTestRunResult(snap.testRunResult);
+    if (snap.testRunResult?.framework) {
+      const fw = snap.testRunResult.framework.toLowerCase();
+      let fwId = "npm";
+      if (fw.includes("pytest") || fw.includes("python")) fwId = "pytest";
+      else if (fw.includes("cargo") || fw.includes("rust")) fwId = "cargo";
+      else if (fw.includes("go")) fwId = "go";
+      else if (fw.includes("jest")) fwId = "jest";
+      else if (fw.includes("vitest")) fwId = "vitest";
+      else if (fw.includes("node")) fwId = "node";
+      setTestFramework({ framework: fwId, name: snap.testRunResult.framework });
+    } else if (snap.scanResult?.languages) {
+      const langs = snap.scanResult.languages;
+      if (!langs.includes("python") && (langs.includes("typescript") || langs.includes("javascript"))) {
+        setTestFramework({ framework: "npm", name: "npm test" });
+      } else if (langs.includes("rust")) {
+        setTestFramework({ framework: "cargo", name: "cargo test" });
+      } else if (langs.includes("go")) {
+        setTestFramework({ framework: "go", name: "go test" });
+      }
+    }
     setHistory(snap.history ?? []);
     // Release the save-guard once the batched renders + effects have flushed.
     window.setTimeout(() => {
@@ -817,15 +896,47 @@ export function App() {
   // produces audioUploaded, which the message handler routes into the answer
   // flow instead of the normal transcript flow.
   const finishVoiceAnswers = stopRecording;
+const triggerAutoRepair = useCallback(() => {
+    const lastResult = testRunResultRef.current;
+    if (!lastResult || !lastResult.output) return;
+    setGenerating(true);
+    setGenerationError(null);
+    pushHistory("Auto-repair started for failing tests…");
+    speakText("Starting test auto repair.");
+    const reqText = requirementRef.current
+      ? JSON.stringify(requirementRef.current)
+      : "Fix failing tests in workspace";
+    const snippets = relevantResultRef.current?.snippets ?? [];
+    vscode.postMessage({
+      type: "repairCode",
+      requirementText: reqText,
+      failedTestOutput: lastResult.output,
+      contextSnippets: snippets,
+      framework: testFramework.framework !== "auto" ? testFramework.framework : undefined,
+    });
+  }, [testFramework.framework, speakText, pushHistory]);
+
+  const runWorkspaceTestsRef = useRef<() => void>(() => {});
+  const triggerAutoRepairRef = useRef<() => void>(() => {});
+  const applyDiffRef = useRef<(diff: string) => void>(() => {});
+  const revertDiffRef = useRef<(diff: string) => void>(() => {});
+  const createNewSessionRef = useRef<() => void>(() => {});
 
   const runWorkspaceTests = useCallback(() => {
     setRunningTests(true);
     vscode.postMessage({
       type: "runWorkspaceTests",
+      framework: testFramework.framework !== "auto" ? testFramework.framework : undefined,
     });
-  }, []);
+  }, [testFramework.framework]);
 
-  const sendPing = useCallback(() => {
+runWorkspaceTestsRef.current = runWorkspaceTests;
+  triggerAutoRepairRef.current = triggerAutoRepair;
+  applyDiffRef.current = applyDiff;
+  revertDiffRef.current = revertDiff;
+  createNewSessionRef.current = createNewSession;
+
+    const sendPing = useCallback(() => {
     pushHistory(`Sending: "${draft}"`);
     vscode.postMessage({ type: "ping", message: draft });
   }, [draft, pushHistory]);
@@ -1507,13 +1618,23 @@ export function App() {
               onClick={runWorkspaceTests}
               disabled={status !== "online" || runningTests}
             >
-              {runningTests ? "Running tests…" : "🧪 Run Workspace Tests (pytest)"}
+              {runningTests ? "Running tests…" : `🧪 Run Workspace Tests (${testFramework.name})`}
             </button>
             {testRunResult && (
               <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
                 <p style={{ margin: "0 0 4px 0" }}>
                   <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
                 </p>
+                {!testRunResult.success && (
+                  <button
+                    className="button primary"
+                    style={{ marginTop: 8, width: "100%" }}
+                    onClick={triggerAutoRepair}
+                    disabled={generating}
+                  >
+                    {generating ? "Auto-repairing with AI…" : "⚡ Auto-Repair with AI (or say \"fix it\")"}
+                  </button>
+                )}
                 {testRunResult.output && (
                   <details style={{ marginTop: "4px" }}>
                     <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>

@@ -267,6 +267,75 @@ def extract_snippet(
     return combined, start, end
 
 
+
+MANIFEST_FILENAMES = [
+    # JavaScript / TypeScript
+    "package.json", "tsconfig.json",
+    # Python
+    "pyproject.toml", "requirements.txt", "setup.py", "Pipfile",
+    # Rust
+    "Cargo.toml",
+    # Go
+    "go.mod",
+    # Java / Kotlin
+    "pom.xml", "build.gradle", "build.gradle.kts",
+    # C# / .NET
+    "Directory.Build.props",
+    # PHP / Ruby
+    "composer.json", "Gemfile",
+]
+
+
+def find_essential_manifests(workspace_root: Path) -> list[str]:
+    """Discover configuration/manifest files for any programming language."""
+    found = []
+    workspace_root = workspace_root.resolve()
+    for name in MANIFEST_FILENAMES:
+        candidate = workspace_root / name
+        if candidate.is_file():
+            found.append(name)
+    for csproj in workspace_root.glob("*.csproj"):
+        if csproj.is_file():
+            try:
+                found.append(str(csproj.relative_to(workspace_root)).replace("\\", "/"))
+            except ValueError:
+                pass
+            break
+    return found
+
+
+def find_paired_test_files(target_paths: list[str], workspace_root: Path) -> list[str]:
+    """Find corresponding test files for selected code files across languages."""
+    test_files = []
+    workspace_root = workspace_root.resolve()
+    for rel_path in target_paths:
+        p = Path(rel_path)
+        stem = p.stem
+        parent = p.parent
+        candidates = [
+            parent / f"{stem}.test{p.suffix}",
+            parent / f"{stem}.spec{p.suffix}",
+            parent / "__tests__" / f"{stem}.test{p.suffix}",
+            parent / "__tests__" / f"{stem}{p.suffix}",
+            parent / f"test_{stem}.py",
+            parent / f"{stem}_test.py",
+            Path("tests") / f"test_{stem}.py",
+            Path("tests") / f"{stem}_test.py",
+            parent / f"{stem}_test.go",
+            Path("tests") / f"test_{stem}.rs",
+        ]
+        for c in candidates:
+            abs_c = (workspace_root / c).resolve()
+            if abs_c.is_file():
+                try:
+                    rel_c = str(abs_c.relative_to(workspace_root)).replace("\\", "/")
+                    if rel_c not in test_files and rel_c not in target_paths:
+                        test_files.append(rel_c)
+                except ValueError:
+                    pass
+    return test_files
+
+
 def select_relevant_files(
     requirement_text: str,
     file_paths: list[str],
@@ -276,10 +345,26 @@ def select_relevant_files(
 ) -> tuple[list[dict], bool]:
     """
     Score and select relevant files, extract bounded snippets.
+    Automatically ensures manifests (package.json, pyproject.toml, etc.)
+    and paired test files are included in the context pool.
     Returns (snippets_list, was_truncated).
     """
+    workspace_root = workspace_root.resolve()
+
+    # Automatically add essential manifests & paired test files
+    expanded_paths = list(file_paths)
+    manifests = find_essential_manifests(workspace_root)
+    for m in manifests:
+        if m not in expanded_paths:
+            expanded_paths.append(m)
+
+    paired_tests = find_paired_test_files(file_paths, workspace_root)
+    for t in paired_tests:
+        if t not in expanded_paths:
+            expanded_paths.append(t)
+
     scored = []
-    for rel_path in file_paths:
+    for rel_path in expanded_paths:
         abs_path = (workspace_root / rel_path).resolve()
         # Security: ensure path is inside workspace
         try:

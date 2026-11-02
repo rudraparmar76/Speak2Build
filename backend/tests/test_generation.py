@@ -462,3 +462,24 @@ def test_api_diff_revert(tmp_path):
     assert data["success"] is True
     assert "code.py" in data["affected_files"]
     assert "added = True" not in f.read_text(encoding="utf-8")
+
+
+def test_run_pytest_on_files_with_html_assets(tmp_path):
+    """Verify that generated non-Python assets (e.g. templates/snake.html) are written to the sandbox."""
+    gen_files = [
+        cg._GeneratedFile(
+            path="templates/snake.html",
+            language="html",
+            content="<!DOCTYPE html><html><body><h1>Snake</h1></body></html>",
+            is_new_file=True,
+        ),
+        cg._GeneratedFile(
+            path="tests/test_snake.py",
+            language="python",
+            content="import os\ndef test_template():\n    assert os.path.exists('templates/snake.html')\n",
+            is_new_file=True,
+        ),
+    ]
+    errors = cg.run_pytest_on_files(gen_files, tmp_path, {"include_tests": True})
+    assert errors == [], f"Expected no errors, got: {errors}"
+

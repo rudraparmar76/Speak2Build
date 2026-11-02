@@ -9,9 +9,13 @@ from app.main import app
 from app.services.validation import (
     find_workspace_python,
     parse_pytest_output,
+    parse_generic_test_output,
+    detect_test_framework,
     run_pytest,
+    run_workspace_tests,
     truncate_output,
     TestRunOutcome,
+    clean_test_output,
 )
 
 client = TestClient(app)
@@ -129,3 +133,108 @@ def test_api_validate_tests_bad_workspace():
         },
     )
     assert response.status_code == 400
+
+
+def test_detect_test_framework_npm():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        (tmp_path / "package.json").write_text(
+            '{"name": "my-app", "scripts": {"test": "jest"}}',
+            encoding="utf-8"
+        )
+        fw_id, fw_name = detect_test_framework(tmp_path)
+        assert fw_id == "npm"
+        assert fw_name == "npm test"
+
+
+def test_detect_test_framework_cargo():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"', encoding="utf-8")
+        fw_id, fw_name = detect_test_framework(tmp_path)
+        assert fw_id == "cargo"
+        assert fw_name == "cargo test"
+
+
+def test_detect_test_framework_go():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        (tmp_path / "go.mod").write_text("module example.com/app", encoding="utf-8")
+        fw_id, fw_name = detect_test_framework(tmp_path)
+        assert fw_id == "go"
+        assert fw_name == "go test"
+
+
+def test_detect_test_framework_default_pytest():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        fw_id, fw_name = detect_test_framework(tmp_path)
+        assert fw_id == "pytest"
+        assert fw_name == "pytest"
+
+
+def test_parse_generic_test_output_jest():
+    stdout = "Tests:  3 passed, 1 failed, 4 total\nTime:   1.234 s"
+    passed, failed, errors, skipped, total, duration, summary = parse_generic_test_output(
+        stdout, "", 1, framework="npm test"
+    )
+    assert passed == 3
+    assert failed == 1
+    assert total == 4
+    assert "3 passed, 1 failed" in summary
+
+
+def test_parse_generic_test_output_cargo():
+    stdout = "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out"
+    passed, failed, errors, skipped, total, duration, summary = parse_generic_test_output(
+        stdout, "", 0, framework="cargo test"
+    )
+    assert passed == 5
+    assert failed == 0
+    assert total == 5
+    assert "5 passed" in summary
+
+
+def test_api_validate_detect_endpoint():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        (tmp_path / "package.json").write_text('{"scripts": {"test": "mocha"}}', encoding="utf-8")
+        response = client.get(f"/api/validate/detect?workspace_root={tmp_path}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["framework"] == "npm"
+        assert data["name"] == "npm test"
+
+
+
+def test_clean_test_output_strips_ansi():
+    raw = "\x1b[36m<body>\x1b[39m\n  [32mhello[39m\n\x1b[0m"
+    cleaned = clean_test_output(raw)
+    assert "\x1b[" not in cleaned
+    assert "[32m" not in cleaned
+    assert "[39m" not in cleaned
+    assert "hello" in cleaned
+
+
+def test_clean_test_output_collapses_dom():
+    raw = """FAIL src/App.test.js
+  ● renders component
+
+    TestingLibraryElementError: Unable to find an element
+
+    Ignored nodes: comments, script, style
+    <body>
+      <div>
+        <div class="header">
+          <h1>Title</h1>
+        </div>
+      </div>
+    </body>
+
+      22 |   render(<App />);
+      23 |   expect(screen.getByText('foo')).toBeInTheDocument();
+"""
+    cleaned = clean_test_output(raw)
+    assert "TestingLibraryElementError" in cleaned
+    assert "[DOM debug output collapsed]" in cleaned
+    assert "render(<App />);" in cleaned

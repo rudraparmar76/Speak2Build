@@ -134,6 +134,23 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             durationSeconds: result.duration_seconds,
             processingSeconds: result.processing_seconds,
           });
+
+          // Check for voice commands ("apply it", "revert", "run tests", "fix it", etc.)
+          try {
+            const command = await client.classifyCommand(result.text);
+            if (command.is_command && command.action !== "none") {
+              this.post({
+                type: "voiceCommandExecuted",
+                action: command.action,
+                feedbackSpeech: command.feedback_speech,
+              });
+              if (command.feedback_speech) {
+                await client.speak(command.feedback_speech).catch(() => {});
+              }
+            }
+          } catch {
+            // best-effort classification
+          }
           break;
         }
         case "extractRequirements": {
@@ -190,6 +207,17 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
               scannedFiles: result.scanned_files,
             },
           });
+          // Auto-detect test framework for this workspace
+          try {
+            const detected = await client.detectTestFramework(workspaceRoot);
+            this.post({
+              type: "testFrameworkDetected",
+              framework: detected.framework,
+              name: detected.name,
+            });
+          } catch {
+            // best-effort
+          }
           break;
         }
         case "getRelevantContext": {
@@ -341,6 +369,44 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           );
           break;
         }
+        case "repairCode": {
+          const folders = vscode.workspace.workspaceFolders;
+          const workspaceRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : "";
+          try {
+            const repairResult = await client.repairCode(
+              message.requirementText,
+              message.failedTestOutput,
+              message.contextSnippets,
+              workspaceRoot,
+              message.framework,
+            );
+            this.post({
+              type: "generationResult",
+              result: {
+                diffs: repairResult.diffs.map((d) => ({
+                  path: d.path,
+                  language: d.language,
+                  unifiedDiff: d.unified_diff,
+                  isNewFile: d.is_new_file,
+                })),
+                summary: repairResult.summary,
+                model: repairResult.model,
+                processingSeconds: repairResult.processing_seconds,
+                validated: repairResult.validated,
+                validationErrors: repairResult.validation_errors,
+                testErrors: repairResult.test_errors,
+                testsPassed: repairResult.tests_passed,
+              },
+            });
+            await client.speak(repairResult.summary).catch(() => {});
+          } catch (error) {
+            this.post({
+              type: "hostError",
+              message: describeError(error, this.getBackendUrl()),
+            });
+          }
+          break;
+        }
         case "runWorkspaceTests": {
           const folders = vscode.workspace.workspaceFolders;
           if (!folders || folders.length === 0) {
@@ -351,11 +417,12 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             return;
           }
           const workspaceRoot = folders[0].uri.fsPath;
-          const result = await client.runTests(workspaceRoot, message.testPath);
+          const result = await client.runTests(workspaceRoot, message.testPath, message.framework);
           this.post({
             type: "testRunResult",
             result: {
               success: result.success,
+              framework: result.framework,
               passed: result.passed,
               failed: result.failed,
               errors: result.errors,
@@ -366,6 +433,24 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
               output: result.output,
             },
           });
+          break;
+        }
+        case "detectTestFramework": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          try {
+            const detected = await client.detectTestFramework(workspaceRoot);
+            this.post({
+              type: "testFrameworkDetected",
+              framework: detected.framework,
+              name: detected.name,
+            });
+          } catch {
+            // best-effort
+          }
           break;
         }
         case "openSettings": {

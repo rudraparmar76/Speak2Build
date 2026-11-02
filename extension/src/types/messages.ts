@@ -35,8 +35,19 @@ export type WebviewToHost =
   | { type: "revertDiff"; unifiedDiff: string; workspaceRoot: string }
   /** Open proposed diff in VS Code native side-by-side diff editor. */
   | { type: "openDiffInEditor"; filePath: string; unifiedDiff: string; isNewFile?: boolean }
-  /** Run pytest in the workspace and report results. */
-  | { type: "runWorkspaceTests"; testPath?: string }
+  /** Run tests in the workspace and report results. */
+  | { type: "runWorkspaceTests"; testPath?: string; framework?: string }
+  /** Auto-repair failing tests using diagnostics. */
+  | {
+      type: "repairCode";
+      requirementText: string;
+      failedTestOutput: string;
+      contextSnippets?: Snippet[];
+      framework?: string;
+    }
+
+  /** Detect test framework for workspace. */
+  | { type: "detectTestFramework" }
   /** Open VS Code Settings filtered to Speak2Build. */
   | { type: "openSettings" }
   /** Request current LLM config state. */
@@ -148,6 +159,7 @@ export type GenerationResult = {
 
 export type TestRunResult = {
   success: boolean;
+  framework?: string;
   passed: number;
   failed: number;
   errors: number;
@@ -222,6 +234,9 @@ export type HostToWebview =
   | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "testRunResult"; result: TestRunResult }
+  | { type: "voiceCommandExecuted"; action: string; feedbackSpeech: string }
+
+  | { type: "testFrameworkDetected"; framework: string; name: string }
   | { type: "llmConfigResult"; config: LlmConfigData }
   | { type: "llmConfigSaved"; success: boolean; model: string; provider: string }
   | { type: "llmTestResult"; valid: boolean; message: string; latencyMs: number }

@@ -115,6 +115,7 @@ interface ApplyDiffResponse {
 
 export interface TestRunApiResponse {
   success: boolean;
+  framework?: string;
   passed: number;
   failed: number;
   errors: number;
@@ -123,6 +124,22 @@ export interface TestRunApiResponse {
   duration_seconds: number;
   summary: string;
   output: string;
+}
+
+export interface CommandClassifyResponse {
+  is_command: boolean;
+  action: "apply" | "revert" | "run_tests" | "repair" | "new_session" | "none";
+  confidence: number;
+  feedback_speech: string;
+}
+
+export interface RepairApiResponse extends GenerationApiResponse {
+  repaired?: boolean;
+}
+
+export interface TestFrameworkDetectResponse {
+  framework: string;
+  name: string;
 }
 
 export interface SpeakResponse {
@@ -390,10 +407,11 @@ export class BackendClient {
     );
   }
 
-  /** Run workspace pytest tests. */
+  /** Run workspace tests (auto-detected or specified framework). */
   async runTests(
     workspaceRoot: string,
     testPath?: string,
+    framework?: string,
     timeoutSeconds: number = 30,
   ): Promise<TestRunApiResponse> {
     return await this.request<TestRunApiResponse>(
@@ -404,10 +422,59 @@ export class BackendClient {
         body: JSON.stringify({
           workspace_root: workspaceRoot,
           test_path: testPath || undefined,
+          framework: framework || undefined,
           timeout_seconds: timeoutSeconds,
         }),
       },
       (timeoutSeconds + 5) * 1000,
+    );
+  }
+
+/** Classify spoken transcript into an actionable voice command. */
+  async classifyCommand(transcript: string): Promise<CommandClassifyResponse> {
+    return await this.request<CommandClassifyResponse>(
+      "POST",
+      "/api/commands/classify",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript }),
+      },
+      REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /** Auto-repair failing tests with LLM guidance. */
+  async repairCode(
+    requirementText: string,
+    failedTestOutput: string,
+    contextSnippets: Snippet[] = [],
+    workspaceRoot?: string,
+    framework?: string,
+    options?: Record<string, unknown>,
+  ): Promise<RepairApiResponse> {
+    return await this.request<RepairApiResponse>(
+      "POST",
+      "/api/repair",
+      {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requirement_text: requirementText,
+          failed_test_output: failedTestOutput,
+          context_snippets: contextSnippets,
+          workspace_root: workspaceRoot || undefined,
+          framework: framework || undefined,
+          options: options || {},
+        }),
+      },
+      GENERATION_TIMEOUT_MS,
+    );
+  }
+
+  /** Auto-detect test framework for workspace. */
+  async detectTestFramework(workspaceRoot: string): Promise<TestFrameworkDetectResponse> {
+    return await this.request<TestFrameworkDetectResponse>(
+      "GET",
+      `/api/validate/detect?workspace_root=${encodeURIComponent(workspaceRoot)}`,
     );
   }
 
