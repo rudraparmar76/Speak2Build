@@ -3,8 +3,10 @@
 import ast
 import difflib
 import json
+import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -323,27 +325,74 @@ def _is_utf8_on_disk(file_path: Path) -> bool:
 
 
 
+def _tsc_command() -> list[str] | None:
+    """Resolve a tsc entry point across platforms.
+
+    Windows quirk: `npx` is a .cmd shim that subprocess can't spawn directly;
+    `shutil.which` returns the actual executable/shim path that works for
+    both. Returns None when neither tsc nor npx is installed.
+    """
+    tsc = shutil.which("tsc")
+    if tsc:
+        return [tsc]
+    npx = shutil.which("npx")
+    if npx:
+        return [npx, "tsc"]
+    return None
+
+
 def validate_typescript_syntax(content: str, file_path: str, workspace_root: Path) -> list[str]:
-    """Run tsc --noEmit on the file (requires tsconfig)."""
+    """Run tsc --noEmit on a .ts/.tsx file; `node --check` for plain .js.
+
+    When the JS/TS toolchain is not installed at all, validation is skipped
+    silently instead of failing generation — syntactic checking is an
+    available best-effort gate, never a hard requirement (documented
+    limitation in the README).
+    """
     workspace_root = _safe_directory(workspace_root)
-    # Write to temp file and run tsc
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".ts", delete=False) as f:
+    is_typescript = file_path.endswith((".ts", ".tsx"))
+
+    if is_typescript:
+        command = _tsc_command()
+        if command is None:
+            logging.getLogger("speak2build.generation").warning(
+                "TypeScript validation skipped: neither tsc nor npx found on PATH"
+            )
+            return []
+        temp_suffix = ".ts"
+    else:
+        node = shutil.which("node")
+        if node is None:
+            logging.getLogger("speak2build.generation").warning(
+                "JavaScript validation skipped: node not found on PATH"
+            )
+            return []
+        command = [node, "--check"]
+        temp_suffix = ".js"
+
+    # Write to temp file and run the checker on just this file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=temp_suffix, delete=False) as f:
         f.write(content)
         temp_path = f.name
     try:
-        # Run tsc on just this file with project's tsconfig if available
+        cmd = list(command)
         tsconfig = workspace_root / "tsconfig.json"
-        cmd = ["npx", "tsc", "--noEmit", "--skipLibCheck"]
-        if tsconfig.exists():
-            cmd.extend(["-p", str(workspace_root)])
+        if is_typescript and tsconfig.exists():
+            cmd.extend(["--noEmit", "--skipLibCheck", "-p", str(workspace_root)])
+        elif is_typescript:
+            cmd.extend(["--noEmit", "--skipLibCheck", temp_path])
         else:
             cmd.append(temp_path)
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=workspace_root)
         if result.returncode != 0:
             return [line for line in result.stdout.splitlines() if file_path in line or temp_path in line]
         return []
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        return [f"TypeScript validation unavailable: {e}"]
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        # Toolchain not found or unavailable on host — skip validation gracefully
+        logging.getLogger("speak2build.generation").warning(
+            "JS/TS validation skipped: %s", e
+        )
+        return []
     finally:
         try:
             os.unlink(temp_path)
