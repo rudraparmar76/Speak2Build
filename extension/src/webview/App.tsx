@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RecorderCard, type RecorderState } from "./components/RecorderCard";
+import { ContextCard } from "./components/ContextCard";
+import { RecordingCard } from "./components/RecordingCard";
+import { TranscriptCard } from "./components/TranscriptCard";
+import { RequirementsCard, type AnswerFlowState } from "./components/RequirementsCard";
+import { DiffBlock } from "./components/DiffBlock";
+import { TestValidationCard } from "./components/TestValidationCard";
+import { SettingsSheet } from "./components/SettingsSheet";
+import { HistoryTab } from "./components/HistoryTab";
+import { ActivityLog } from "./components/ActivityLog";
 import { getVsCodeApi } from "./bridge";
+import {
+  MAX_RECORDING_MS,
+  PROVIDER_MODELS,
+  type BackendStatus,
+  type HistoryEntry,
+  type UploadInfo,
+  type TranscriptInfo,
+} from "./constants";
 import type {
   ClarificationInfo,
   FileDiff,
@@ -14,113 +31,10 @@ import type {
   ScanResult,
   SessionMeta,
   SessionSnapshot,
-  Snippet,
   TestRunResult,
 } from "../types/messages";
 
-const PROVIDER_MODELS: Record<string, { label: string; models: { id: string; name: string }[]; needsKey: boolean; keyHint: string; keyUrl?: string }> = {
-  "google-ai-studio": {
-    label: "Google AI Studio (Gemini)",
-    models: [
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recommended - Free, Fast)" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Deep Reasoning)" },
-    ],
-    needsKey: true,
-    keyHint: "Get free key from aistudio.google.com",
-    keyUrl: "https://aistudio.google.com/apikey",
-  },
-  "groq": {
-    label: "Groq Cloud",
-    models: [
-      { id: "qwen-qwq-32b", name: "Qwen QwQ 32B (Very Fast, High Quality)" },
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-    ],
-    needsKey: true,
-    keyHint: "Get free key from console.groq.com",
-    keyUrl: "https://console.groq.com/keys",
-  },
-  "ollama": {
-    label: "Ollama (Local)",
-    models: [
-      { id: "qwen3:14b", name: "Qwen 3 14B (Recommended)" },
-      { id: "qwen3:8b", name: "Qwen 3 8B (Fast, Low VRAM)" },
-      { id: "qwen3:32b", name: "Qwen 3 32B (Best Quality)" },
-      { id: "llama3.3:latest", name: "Llama 3.3 70B" },
-    ],
-    needsKey: false,
-    keyHint: "No API key needed (runs locally at 127.0.0.1:11434)",
-  },
-  "nvidia-nim": {
-    label: "NVIDIA NIM",
-    models: [
-      { id: "nvidia/nemotron-3-ultra-550b-a55b", name: "Nemotron 3 Ultra 550B (Current)" },
-      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
-    ],
-    needsKey: true,
-    keyHint: "Get key from build.nvidia.com",
-    keyUrl: "https://build.nvidia.com",
-  },
-  "openai": {
-    label: "OpenAI",
-    models: [
-      { id: "gpt-4.1-mini", name: "GPT-4.1 mini (Recommended)" },
-      { id: "gpt-4.1", name: "GPT-4.1 (Flagship)" },
-      { id: "gpt-4o", name: "GPT-4o" },
-    ],
-    needsKey: true,
-    keyHint: "Get key from platform.openai.com",
-    keyUrl: "https://platform.openai.com/api-keys",
-  },
-};
-
 const vscode = getVsCodeApi();
-
-const MAX_RECORDING_MS = 120_000;
-
-type BackendStatus = "connecting" | "online" | "offline";
-
-interface HistoryEntry {
-  id: number;
-  text: string;
-  timestamp: string;
-}
-
-interface UploadInfo {
-  audioId: string;
-  durationSeconds: number;
-  sampleRate: number;
-  channels: number;
-  sizeBytes: number;
-}
-
-interface TranscriptInfo {
-  audioId: string;
-  language?: string;
-  text: string;
-  segments: Array<{ start: number; end: number; text: string }>;
-  durationSeconds: number;
-  processingSeconds: number;
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-/** Friendly relative time for the session-history list. */
-function formatSessionTime(ts: number): string {
-  const diffMs = Date.now() - ts;
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString();
-}
 
 export function App() {
   const [status, setStatus] = useState<BackendStatus>("connecting");
@@ -168,7 +82,7 @@ export function App() {
     name: "pytest",
   });
   const revertingDiffRef = useRef<string | null>(null);
-const generationResultRef = useRef<GenerationResult | null>(null);
+  const generationResultRef = useRef<GenerationResult | null>(null);
   generationResultRef.current = generationResult;
   const appliedDiffsRef = useRef<Set<string>>(new Set());
   appliedDiffsRef.current = appliedDiffs;
@@ -203,11 +117,11 @@ const generationResultRef = useRef<GenerationResult | null>(null);
   const speakingTimerRef = useRef<number | null>(null);
 
   // Voice-answers flow: idle → recording → processing → idle.
-  const [answerFlow, setAnswerFlow] = useState<"idle" | "recording" | "processing">("idle");
-  const answerFlowRef = useRef<"idle" | "recording" | "processing">("idle");
+  const [answerFlow, setAnswerFlow] = useState<AnswerFlowState>("idle");
+  const answerFlowRef = useRef<AnswerFlowState>("idle");
   const openQuestionsRef = useRef<string[]>([]);
   const setAnswerFlowBoth = useCallback(
-    (next: "idle" | "recording" | "processing") => {
+    (next: AnswerFlowState) => {
       answerFlowRef.current = next;
       setAnswerFlow(next);
     },
@@ -486,7 +400,7 @@ const generationResultRef = useRef<GenerationResult | null>(null);
           }
           break;
         }
-case "voiceCommandExecuted": {
+        case "voiceCommandExecuted": {
           pushHistory(`🎙️ Voice Command: ${message.action} ("${message.feedbackSpeech}")`);
           if (message.action === "apply") {
             const gen = generationResultRef.current;
@@ -908,7 +822,7 @@ case "voiceCommandExecuted": {
   // produces audioUploaded, which the message handler routes into the answer
   // flow instead of the normal transcript flow.
   const finishVoiceAnswers = stopRecording;
-const triggerAutoRepair = useCallback(() => {
+  const triggerAutoRepair = useCallback(() => {
     const lastResult = testRunResultRef.current;
     if (!lastResult || !lastResult.output) return;
     setGenerating(true);
@@ -942,68 +856,19 @@ const triggerAutoRepair = useCallback(() => {
     });
   }, [testFramework.framework]);
 
-runWorkspaceTestsRef.current = runWorkspaceTests;
+  runWorkspaceTestsRef.current = runWorkspaceTests;
   triggerAutoRepairRef.current = triggerAutoRepair;
   applyDiffRef.current = applyDiff;
   revertDiffRef.current = revertDiff;
   createNewSessionRef.current = createNewSession;
 
-    const sendPing = useCallback(() => {
+  const sendPing = useCallback(() => {
     pushHistory(`Sending: "${draft}"`);
     vscode.postMessage({ type: "ping", message: draft });
   }, [draft, pushHistory]);
 
-  // Render file tree with checkboxes
-  const renderFileTree = useCallback((node: FileNode): React.ReactNode => {
-    if (node.isDir) {
-      return (
-        <details key={node.path} className="file-tree-dir" open>
-          <summary className="file-tree-summary">
-            <span className="dir-name">📁 {node.name}</span>
-          </summary>
-          <div className="file-tree-children">
-            {node.children?.map((child) => renderFileTree(child))}
-          </div>
-        </details>
-      );
-    }
-    const isSelected = selectedFiles.has(node.path);
-    return (
-      <label key={node.path} className="file-tree-file">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => toggleFileSelection(node.path)}
-        />
-        <span className={`file-name ${node.language ? `lang-${node.language}` : ""}`}>
-          📄 {node.name}
-        </span>
-      </label>
-    );
-  }, [selectedFiles, toggleFileSelection]);
-
-  // Render snippets
-  const renderSnippets = useCallback(() => {
-    if (!relevantResult || relevantResult.snippets.length === 0) return null;
-    return (
-      <div className="snippets">
-        <div className="sub-label">Relevant Snippets ({relevantResult.snippets.length})</div>
-        {relevantResult.snippets.map((snippet: Snippet, index: number) => (
-          <div key={index} className="snippet">
-            <div className="snippet-header">
-              <span className="snippet-path">{snippet.path}</span>
-              {snippet.language && <span className="hint">({snippet.language})</span>}
-              <span className="hint">lines {snippet.startLine}–{snippet.endLine}</span>
-            </div>
-            <pre className="snippet-content">{snippet.content}</pre>
-          </div>
-        ))}
-        {relevantResult.truncated && (
-          <p className="hint">⚠ Context truncated to fit budget ({relevantResult.totalChars} chars)</p>
-        )}
-      </div>
-    );
-  }, [relevantResult]);
+  const online = status === "online";
+  const hasRelevantContext = !!relevantResult && relevantResult.snippets.length > 0;
 
   return (
     <main className="panel">
@@ -1047,167 +912,43 @@ runWorkspaceTestsRef.current = runWorkspaceTests;
 
       {/* In-UI LLM Model & Provider Settings */}
       {showSettings && (
-        <section className="settings-modal-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontWeight: 600, fontSize: "12px" }}>🤖 LLM Provider & Model</span>
-            <button
-              onClick={() => setShowSettings(false)}
-              style={{ background: "transparent", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6 }}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="settings-field">
-            <label htmlFor="llm-provider-select">Provider</label>
-            <select
-              id="llm-provider-select"
-              className="settings-select"
-              value={selectedProvider}
-              onChange={(e) => {
-                const prov = e.target.value;
-                setSelectedProvider(prov);
-                const models = PROVIDER_MODELS[prov]?.models;
-                if (models && models.length > 0) {
-                  setSelectedModel(models[0].id);
-                }
-              }}
-            >
-              {Object.entries(PROVIDER_MODELS).map(([key, info]) => (
-                <option key={key} value={key}>
-                  {info.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="settings-field">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label htmlFor="llm-model-input">Model Name</label>
-              <span style={{ fontSize: "10px", opacity: 0.7 }}>e.g. gemini-2.5-flash, qwen-qwq-32b</span>
-            </div>
-            <input
-              id="llm-model-input"
-              type="text"
-              className="settings-input"
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              placeholder="Enter model name..."
-            />
-          </div>
-
-          {PROVIDER_MODELS[selectedProvider]?.needsKey && (
-            <div className="settings-field">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <label htmlFor="llm-api-key-input">
-                  API Key {configuredProviders[selectedProvider] && !apiKeyInput && (
-                    <span style={{ color: "#4ade80", fontWeight: "normal" }}>(Key configured ✓)</span>
-                  )}
-                </label>
-                {PROVIDER_MODELS[selectedProvider]?.keyUrl && (
-                  <span style={{ fontSize: "10px", opacity: 0.8 }}>
-                    {PROVIDER_MODELS[selectedProvider]?.keyHint}
-                  </span>
-                )}
-              </div>
-              <input
-                id="llm-api-key-input"
-                type="password"
-                className="settings-input"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={
-                  configuredProviders[selectedProvider]
-                    ? "•••••••••••••••• (Leave blank to keep existing)"
-                    : "Paste your API key here (required)"
-                }
-              />
-            </div>
-          )}
-
-          {!PROVIDER_MODELS[selectedProvider]?.needsKey && (
-            <div style={{ fontSize: "11px", opacity: 0.75, background: "rgba(255,255,255,0.05)", padding: "6px 8px", borderRadius: "4px" }}>
-              💡 {PROVIDER_MODELS[selectedProvider]?.keyHint}
-            </div>
-          )}
-
-          {testResult && (
-            <div
-              style={{
-                fontSize: "11px",
-                padding: "6px 8px",
-                borderRadius: "4px",
-                background: testResult.valid ? "rgba(35, 134, 54, 0.15)" : "rgba(218, 54, 51, 0.15)",
-                border: `1px solid ${testResult.valid ? "#238636" : "#da3633"}`,
-                color: testResult.valid ? "#4ade80" : "#f87171",
-              }}
-            >
-              {testResult.valid ? "✓ " : "✗ "}
-              {testResult.message}
-              {testResult.valid && testResult.latencyMs > 0 && ` (${testResult.latencyMs}ms)`}
-            </div>
-          )}
-
-          {settingsSavedMsg && (
-            <div style={{ color: "#4ade80", fontSize: "11px", textAlign: "center" }}>
-              ✓ {settingsSavedMsg}
-            </div>
-          )}
-
-          <div className="settings-actions">
-            <button
-              className="button secondary"
-              style={{ padding: "4px 10px", fontSize: "11px" }}
-              disabled={testingConnection}
-              onClick={() => {
-                setTestingConnection(true);
-                setTestResult(null);
-                vscode.postMessage({
-                  type: "testLlmConfig",
-                  provider: selectedProvider,
-                  model: selectedModel.trim(),
-                  apiKey: apiKeyInput.trim() || undefined,
-                });
-              }}
-            >
-              {testingConnection ? "Pinging…" : "🔌 Test Key"}
-            </button>
-            <button
-              className="button secondary"
-              style={{ padding: "4px 10px", fontSize: "11px" }}
-              onClick={() => setShowSettings(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="button"
-              style={{ padding: "4px 12px", fontSize: "11px" }}
-              disabled={
-                !selectedModel.trim() ||
-                (PROVIDER_MODELS[selectedProvider]?.needsKey &&
-                  !configuredProviders[selectedProvider] &&
-                  !apiKeyInput.trim())
-              }
-              title={
-                PROVIDER_MODELS[selectedProvider]?.needsKey &&
-                !configuredProviders[selectedProvider] &&
-                !apiKeyInput.trim()
-                  ? "Enter an API key before proceeding"
-                  : "Save and apply this configuration"
-              }
-              onClick={() => {
-                vscode.postMessage({
-                  type: "updateLlmConfig",
-                  provider: selectedProvider,
-                  model: selectedModel.trim(),
-                  apiKey: apiKeyInput.trim() || undefined,
-                });
-              }}
-            >
-              Apply & Save
-            </button>
-          </div>
-        </section>
+        <SettingsSheet
+          selectedProvider={selectedProvider}
+          selectedModel={selectedModel}
+          apiKeyInput={apiKeyInput}
+          configuredProviders={configuredProviders}
+          settingsSavedMsg={settingsSavedMsg}
+          testingConnection={testingConnection}
+          testResult={testResult}
+          onProviderChange={(prov) => {
+            setSelectedProvider(prov);
+            const models = PROVIDER_MODELS[prov]?.models;
+            if (models && models.length > 0) {
+              setSelectedModel(models[0].id);
+            }
+          }}
+          onModelChange={(model) => setSelectedModel(model)}
+          onApiKeyChange={(key) => setApiKeyInput(key)}
+          onTestKey={() => {
+            setTestingConnection(true);
+            setTestResult(null);
+            vscode.postMessage({
+              type: "testLlmConfig",
+              provider: selectedProvider,
+              model: selectedModel.trim(),
+              apiKey: apiKeyInput.trim() || undefined,
+            });
+          }}
+          onClose={() => setShowSettings(false)}
+          onSave={() => {
+            vscode.postMessage({
+              type: "updateLlmConfig",
+              provider: selectedProvider,
+              model: selectedModel.trim(),
+              apiKey: apiKeyInput.trim() || undefined,
+            });
+          }}
+        />
       )}
 
       {/* Session tabs: the working board vs. saved sessions */}
@@ -1240,502 +981,193 @@ runWorkspaceTestsRef.current = runWorkspaceTests;
 
       {viewTab === "chat" ? (
         <>
-      {/* 1. Project Context (Context-First Workflow) */}
-      <section className="card">
-        <div className="label">Project Context</div>
-        {!scanResult ? (
-          <div>
-            <p className="hint">
-              Select workspace files to provide code context before or after speaking.
-            </p>
-            <button
-              className="button"
-              onClick={scanWorkspace}
-              disabled={status !== "online" || scanning}
-            >
-              {scanning ? "Scanning…" : "🔍 Scan workspace"}
-            </button>
-            {contextError && <p className="error-text">{contextError}</p>}
-          </div>
-        ) : (
-          <div>
-            <p className="hint">
-              Detected: {scanResult.languages.join(", ") || "none"} · {scanResult.scannedFiles} files
-            </p>
-            <button
-              className="button"
-              onClick={scanWorkspace}
-              disabled={status !== "online" || scanning}
-            >
-              {scanning ? "Scanning…" : "🔍 Re-scan workspace"}
-            </button>
-            {contextError && <p className="error-text">{contextError}</p>}
+          {/* 1. Project Context (Context-First Workflow) */}
+          <ContextCard
+            online={online}
+            scanResult={scanResult}
+            scanning={scanning}
+            fetchingRelevant={fetchingRelevant}
+            contextError={contextError}
+            selectedFiles={selectedFiles}
+            relevantResult={relevantResult}
+            hasRequirement={requirement !== null}
+            extracting={extracting}
+            onScan={scanWorkspace}
+            onToggleFile={toggleFileSelection}
+            onFetchRelevant={fetchRelevantContext}
+            onReExtract={() => extractRequirements(extractAnswers)}
+          />
 
-            <div className="file-tree">
-              {renderFileTree(scanResult.fileTree)}
-            </div>
+          {/* 2. Voice Capture */}
+          <RecorderCard
+            state={recorderState}
+            elapsedMs={elapsedMs}
+            error={recorderError}
+            disabled={!online}
+            onToggle={recorderState === "recording" ? stopRecording : startRecording}
+            onCancel={cancelRecording}
+          />
 
-            <div className="file-selection-summary">
-              {selectedFiles.size > 0 && (
-                <>
-                  <p className="hint">{selectedFiles.size} file(s) selected</p>
-                  <button
-                    className="button"
-                    onClick={fetchRelevantContext}
-                    disabled={status !== "online" || fetchingRelevant}
-                  >
-                    {fetchingRelevant ? "Fetching snippets…" : "📥 Get relevant context"}
-                  </button>
-                </>
-              )}
-            </div>
+          {/* 3. Last Recording */}
+          {lastUpload && (
+            <RecordingCard
+              upload={lastUpload}
+              transcribingId={transcribingId}
+              online={online}
+              onTranscribe={startTranscription}
+            />
+          )}
 
-            {renderSnippets()}
+          {/* 4. Transcript */}
+          {transcript && (
+            <TranscriptCard
+              transcript={transcript}
+              relevantSnippetCount={relevantResult?.snippets.length ?? 0}
+              extracting={extracting}
+              extractError={extractError}
+              online={online}
+              onTextChange={(text) =>
+                setTranscript((current) =>
+                  current === null ? current : { ...current, text },
+                )
+              }
+              onExtract={() => extractRequirements()}
+            />
+          )}
 
-            {relevantResult && relevantResult.snippets.length > 0 && (
-              <div
-                className="context-ready-badge"
-                style={{
-                  marginTop: "8px",
-                  padding: "6px 10px",
-                  background: "rgba(34, 197, 94, 0.15)",
-                  border: "1px solid rgba(34, 197, 94, 0.4)",
-                  borderRadius: "4px",
-                }}
-              >
-                <span style={{ color: "#4ade80", fontWeight: 600, fontSize: "12px" }}>
-                  ✓ Context loaded ({relevantResult.snippets.length} snippet{relevantResult.snippets.length === 1 ? "" : "s"} ready for voice instructions)
-                </span>
-              </div>
-            )}
+          {/* 5. Requirements */}
+          {requirement && (
+            <RequirementsCard
+              requirement={requirement}
+              meta={requirementMeta}
+              answers={extractAnswers}
+              answerFlow={answerFlow}
+              hasRelevantContext={hasRelevantContext}
+              extracting={extracting}
+              online={online}
+              onAnswerChange={updateAnswer}
+              onReExtract={() => extractRequirements(extractAnswers)}
+              onStartVoiceAnswers={startVoiceAnswers}
+              onFinishVoiceAnswers={finishVoiceAnswers}
+            />
+          )}
 
-            {relevantResult && relevantResult.snippets.length > 0 && requirement && (
+          {/* 6. Code Generation */}
+          {requirement && (
+            <section className="card">
+              <div className="label">Code Generation</div>
+              <p className="hint">
+                {hasRelevantContext
+                  ? `Generate code from requirements + ${relevantResult!.snippets.length} context snippet(s).`
+                  : "Generate code from requirements (select files in Project Context above for best accuracy)."}
+              </p>
               <button
                 className="button"
-                style={{ marginTop: "8px" }}
-                onClick={() => extractRequirements(extractAnswers)}
-                disabled={status !== "online" || extracting}
+                onClick={generateCode}
+                disabled={!online || generating}
               >
-                {extracting ? "Updating requirements…" : "🔄 Re-extract requirements with selected context"}
+                {generating ? "Generating code…" : "⚡ Generate code"}
               </button>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* 2. Voice Capture */}
-      <RecorderCard
-        state={recorderState}
-        elapsedMs={elapsedMs}
-        error={recorderError}
-        disabled={status !== "online"}
-        onToggle={recorderState === "recording" ? stopRecording : startRecording}
-        onCancel={cancelRecording}
-      />
-
-      {/* 3. Last Recording */}
-      {lastUpload && (
-        <section className="card">
-          <div className="label">Last recording received by backend</div>
-          <p className="recording-meta">
-            Duration {lastUpload.durationSeconds.toFixed(1)}s
-            {" · "}{lastUpload.sampleRate} Hz
-            {" · "}{lastUpload.channels} channel{lastUpload.channels === 1 ? "" : "s"}
-            {" · "}{(lastUpload.sizeBytes / 1024).toFixed(0)} KB
-          </p>
-          <button
-            className="button"
-            onClick={() => startTranscription(lastUpload.audioId)}
-            disabled={status !== "online" || transcribingId !== null}
-          >
-            {transcribingId === lastUpload.audioId
-              ? "Transcribing… (first call may warm the model)"
-              : "▶ Transcribe"}
-          </button>
-        </section>
-      )}
-
-      {/* 4. Transcript */}
-      {transcript && (
-        <section className="card">
-          <div className="label">Transcript (editable)</div>
-          {transcript.language && (
-            <p className="hint">Detected language: {transcript.language}</p>
+              {generationError && <p className="error-text">{generationError}</p>}
+            </section>
           )}
-          <textarea
-            className="textarea"
-            rows={Math.min(10, Math.max(3, Math.ceil(transcript.text.length / 60) + 1))}
-            value={transcript.text}
-            onChange={(event) =>
-              setTranscript((current) =>
-                current === null ? current : { ...current, text: event.target.value },
-              )
-            }
-            placeholder="Transcription will appear here…"
-          />
-          {transcript.segments.length > 1 && (
-            <ul className="segments">
-              {transcript.segments.map((segment, index) => (
-                <li key={index}>
-                  <span className="entry-time">
-                    {formatTime(segment.start)}–{formatTime(segment.end)}
-                  </span>{" "}
-                  {segment.text}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="hint">
-            {transcript.durationSeconds.toFixed(1)}s of audio processed in {transcript.processingSeconds.toFixed(1)}s.
-            {relevantResult && relevantResult.snippets.length > 0
-              ? ` Loaded context (${relevantResult.snippets.length} snippets) will guide requirement extraction.`
-              : " Fix any misrecognized terms above."}
-          </p>
-          <button
-            className="button"
-            onClick={() => extractRequirements()}
-            disabled={status !== "online" || extracting || transcript.text.trim().length < 3}
-          >
-            {extracting ? "Extracting requirements…" : "⚙ Extract requirements"}
-          </button>
-          {extractError && <p className="error-text">{extractError}</p>}
-        </section>
-      )}
 
-      {/* 5. Requirements */}
-      {requirement && (
-        <section className="card">
-          <div className="label">Requirements</div>
-          {requirementMeta && (
-            <p className="hint">
-              {requirementMeta.model}
-              {requirementMeta.repaired ? " · schema-repaired" : ""} ·{" "}
-              {requirementMeta.processingSeconds.toFixed(1)}s
-            </p>
-          )}
-          <p className="requirement-task">{requirement.task}</p>
-
-          {(
-            [
-              ["Inputs", requirement.inputs],
-              ["Outputs", requirement.outputs],
-              ["Constraints", requirement.constraints],
-              ["Acceptance criteria", requirement.acceptanceCriteria],
-            ] as Array<[string, string[]]>
-          ).map(
-            ([title, items]) =>
-              items.length > 0 && (
-                <div key={title}>
-                  <div className="sub-label">{title}</div>
-                  <ul className="bullets">
-                    {items.map((item, index) => (
-                      <li key={index}>{item}</li>
+          {/* 7. Generated Diffs & Test Validation */}
+          {generationResult && (
+            <section className="card">
+              <div className="label">
+                Generated Diffs ({generationResult.diffs.length})
+              </div>
+              {generationResult.summary && (
+                <p className="hint">{generationResult.summary}</p>
+              )}
+              <p className="hint">
+                {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
+                {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
+                {generationResult.testsPassed && " ✓ tests passed"}
+                {generationResult.testErrors && generationResult.testErrors.length > 0 && !generationResult.testsPassed && " ⚠ test failures"}
+              </p>
+              {generationResult.validationErrors.length > 0 && (
+                <div className="validation-errors">
+                  <strong>Validation warnings:</strong>
+                  <ul>
+                    {generationResult.validationErrors.map((err, i) => (
+                      <li key={i}>{err}</li>
                     ))}
                   </ul>
                 </div>
-              ),
-          )}
-
-          {requirement.clarifications.length > 0 && (
-            <div>
-              <div className="sub-label">
-                Clarifications ({requirement.clarifications.length})
-              </div>
-              {requirement.clarifications.map((item: ClarificationInfo, index) => (
-                <div key={index} className="clarification">
-                  <p className="clarification-question">
-                    {item.question}
-                    {item.reason && <span className="hint"> — {item.reason}</span>}
-                  </p>
-                  <input
-                    className="input"
-                    value={
-                      extractAnswers[item.question] ?? item.answer ?? ""
+              )}
+              {generationResult.testErrors && generationResult.testErrors.length > 0 && (
+                <div className="validation-errors">
+                  <strong>Test failures:</strong>
+                  <ul>
+                    {generationResult.testErrors.map((err, i) => (
+                      <li key={i}><pre style={{whiteSpace: 'pre-wrap', fontSize: '10px', margin: 0}}>{err}</pre></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {generationResult.diffs
+                .filter((d: FileDiff) => !dismissedDiffs.has(d.unifiedDiff))
+                .map((diff: FileDiff, index: number) => (
+                  <DiffBlock
+                    key={index}
+                    diff={diff}
+                    isApplied={appliedDiffs.has(diff.unifiedDiff)}
+                    isApplying={applyingDiff === diff.unifiedDiff}
+                    isReverting={revertingDiff === diff.unifiedDiff}
+                    errorMessage={
+                      applyError?.diff === diff.unifiedDiff ? applyError.message : null
                     }
-                    onChange={(event) => updateAnswer(item.question, event.target.value)}
-                    placeholder="Your answer…"
+                    online={online}
+                    onView={() => openDiffInEditor(diff.path, diff.unifiedDiff, diff.isNewFile)}
+                    onApply={() => applyDiff(diff.unifiedDiff)}
+                    onReject={() => dismissDiff(diff.unifiedDiff)}
+                    onRevert={() => revertDiff(diff.unifiedDiff)}
                   />
-                </div>
-              ))}
-              <button
-                className="button"
-                onClick={() => extractRequirements(extractAnswers)}
-                disabled={
-                  status !== "online" ||
-                  extracting ||
-                  answerFlow !== "idle" ||
-                  (Object.values(extractAnswers).every((a) => a.trim().length === 0) &&
-                    (!relevantResult || relevantResult.snippets.length === 0))
-                }
-              >
-                {extracting
-                  ? "Extracting…"
-                  : relevantResult && relevantResult.snippets.length > 0
-                  ? "⚙ Re-extract with context & answers"
-                  : "⚙ Re-extract with answers"}
-              </button>
-              <div className="voice-answers-flow">
-                {answerFlow === "idle" &&
-                  requirement.clarifications.some((item) => !item.answer) && (
-                    <button
-                      className="button secondary"
-                      onClick={() =>
-                        startVoiceAnswers(
-                          requirement.clarifications
-                            .filter((item) => !item.answer)
-                            .map((item) => item.question),
-                        )
-                      }
-                      title="Record one spoken take answering every open question"
-                      disabled={status !== "online"}
-                    >
-                      🎤 Answer all by voice
-                    </button>
-                  )}
-                {answerFlow === "recording" && (
-                  <>
-                    <p className="hint">
-                      🎙 Recording — speak each answer in the order the questions were asked,
-                      pause between them, then stop.
-                    </p>
-                    <button className="button" onClick={finishVoiceAnswers}>
-                      ■ Stop &amp; process answers
-                    </button>
-                  </>
-                )}
-                {answerFlow === "processing" && (
-                  <p className="hint">↻ Transcribing and mapping your spoken answers…</p>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 6. Code Generation */}
-      {requirement && (
-        <section className="card">
-          <div className="label">Code Generation</div>
-          <p className="hint">
-            {relevantResult && relevantResult.snippets.length > 0
-              ? `Generate code from requirements + ${relevantResult.snippets.length} context snippet(s).`
-              : "Generate code from requirements (select files in Project Context above for best accuracy)."}
-          </p>
-          <button
-            className="button"
-            onClick={generateCode}
-            disabled={status !== "online" || generating}
-          >
-            {generating ? "Generating code…" : "⚡ Generate code"}
-          </button>
-          {generationError && <p className="error-text">{generationError}</p>}
-        </section>
-      )}
-
-      {/* 7. Generated Diffs & Test Validation */}
-      {generationResult && (
-        <section className="card">
-          <div className="label">
-            Generated Diffs ({generationResult.diffs.length})
-          </div>
-          {generationResult.summary && (
-            <p className="hint">{generationResult.summary}</p>
-          )}
-          <p className="hint">
-            {generationResult.model} · {generationResult.processingSeconds.toFixed(1)}s
-            {generationResult.validated ? " ✓ validated" : " ⚠ validation issues"}
-            {generationResult.testsPassed && " ✓ tests passed"}
-            {generationResult.testErrors && generationResult.testErrors.length > 0 && !generationResult.testsPassed && " ⚠ test failures"}
-          </p>
-          {generationResult.validationErrors.length > 0 && (
-            <div className="validation-errors">
-              <strong>Validation warnings:</strong>
-              <ul>
-                {generationResult.validationErrors.map((err, i) => (
-                  <li key={i}>{err}</li>
                 ))}
-              </ul>
-            </div>
-          )}
-          {generationResult.testErrors && generationResult.testErrors.length > 0 && (
-            <div className="validation-errors">
-              <strong>Test failures:</strong>
-              <ul>
-                {generationResult.testErrors.map((err, i) => (
-                  <li key={i}><pre style={{whiteSpace: 'pre-wrap', fontSize: '10px', margin: 0}}>{err}</pre></li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {generationResult.diffs
-            .filter((d: FileDiff) => !dismissedDiffs.has(d.unifiedDiff))
-            .map((diff: FileDiff, index: number) => {
-              const isApplying = applyingDiff === diff.unifiedDiff;
-              const isReverting = revertingDiff === diff.unifiedDiff;
-              const isApplied = appliedDiffs.has(diff.unifiedDiff);
-              const hasError = applyError?.diff === diff.unifiedDiff;
-              return (
-                <div key={index} className="diff-card">
-                  <div className="diff-header">
-                    <span className="diff-path">{diff.path}</span>
-                    <span className="hint">({diff.language})</span>
-                    {diff.isNewFile && <span className="badge new-file">New file</span>}
-                    {isApplied && <span className="badge applied">✓ Applied</span>}
-                  </div>
-                  <pre className="diff-content">{diff.unifiedDiff}</pre>
-                  <div className="diff-actions">
-                    <button
-                      className="button secondary"
-                      onClick={() => openDiffInEditor(diff.path, diff.unifiedDiff, diff.isNewFile)}
-                      title="Open side-by-side diff in VS Code editor"
-                    >
-                      🔍 View in Editor
-                    </button>
-                    {!isApplied ? (
-                      <>
-                        <button
-                          className="button"
-                          onClick={() => applyDiff(diff.unifiedDiff)}
-                          disabled={status !== "online" || isApplying}
-                        >
-                          {isApplying ? "Applying…" : "✓ Apply"}
-                        </button>
-                        <button
-                          className="button secondary"
-                          onClick={() => dismissDiff(diff.unifiedDiff)}
-                          title="Reject and dismiss this diff"
-                        >
-                          ✕ Reject
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="button danger"
-                        onClick={() => revertDiff(diff.unifiedDiff)}
-                        disabled={status !== "online" || isReverting}
-                      >
-                        {isReverting ? "Reverting…" : "⎌ Revert"}
-                      </button>
-                    )}
-                  </div>
-                  {hasError && <p className="error-text">{applyError.message}</p>}
-                </div>
-              );
-            })}
 
-          <div className="test-validation-section">
-            <div className="sub-label">Workspace Test Validation</div>
+              <TestValidationCard
+                online={online}
+                runningTests={runningTests}
+                generating={generating}
+                testFrameworkName={testFramework.name}
+                testRunResult={testRunResult}
+                onRunTests={runWorkspaceTests}
+                onAutoRepair={triggerAutoRepair}
+              />
+            </section>
+          )}
+
+          <section className="card">
+            <label className="label" htmlFor="ping-input">
+              Connection check (Milestone 0)
+            </label>
+            <input
+              id="ping-input"
+              className="input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Type a short message…"
+            />
             <button
-              className="button secondary"
-              onClick={runWorkspaceTests}
-              disabled={status !== "online" || runningTests}
+              className="button"
+              onClick={sendPing}
+              disabled={!online || draft.trim().length === 0}
             >
-              {runningTests ? "Running tests…" : `🧪 Run Workspace Tests (${testFramework.name})`}
+              Send to backend
             </button>
-            {testRunResult && (
-              <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
-                <p style={{ margin: "0 0 4px 0" }}>
-                  <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
-                </p>
-                {!testRunResult.success && (
-                  <button
-                    className="button primary"
-                    style={{ marginTop: 8, width: "100%" }}
-                    onClick={triggerAutoRepair}
-                    disabled={generating}
-                  >
-                    {generating ? "Auto-repairing with AI…" : "⚡ Auto-Repair with AI (or say \"fix it\")"}
-                  </button>
-                )}
-                {testRunResult.output && (
-                  <details style={{ marginTop: "4px" }}>
-                    <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>
-                    <pre className="test-output-log">{testRunResult.output}</pre>
-                  </details>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+          </section>
 
-      <section className="card">
-        <label className="label" htmlFor="ping-input">
-          Connection check (Milestone 0)
-        </label>
-        <input
-          id="ping-input"
-          className="input"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Type a short message…"
-        />
-        <button
-          className="button"
-          onClick={sendPing}
-          disabled={status !== "online" || draft.trim().length === 0}
-        >
-          Send to backend
-        </button>
-      </section>
-
-      <section className="history">
-        <div className="label">Activity log</div>
-        {history.length === 0 ? (
-          <p className="empty">No activity yet.</p>
-        ) : (
-          <ul>
-            {history.map((entry) => (
-              <li key={entry.id}>
-                <span className="entry-time">{entry.timestamp}</span> {entry.text}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <ActivityLog history={history} />
         </>
       ) : (
-        <section className="card history-tab">
-          <div className="label">🕘 Session history</div>
-          <p className="hint">
-            Sessions are saved automatically for this workspace — including transcripts,
-            requirements, context, and generated diffs.
-          </p>
-          {activeSession && (
-            <p className="hint session-active-hint">
-              Active: <strong>{activeSession.title}</strong>
-            </p>
-          )}
-          {sessionList.length === 0 ? (
-            <p className="empty">No saved sessions yet.</p>
-          ) : (
-            <ul className="session-list">
-              {sessionList.map((s) => (
-                <li
-                  key={s.id}
-                  className={`session-row ${s.id === activeSession?.id ? "active" : ""}`}
-                  onClick={() => openPastSession(s.id)}
-                  title="Open this session and continue where you left off"
-                >
-                  <div className="session-text">
-                    <span className="session-title">{s.title}</span>
-                    <span className="session-meta">{formatSessionTime(s.updatedAt)}</span>
-                  </div>
-                  <button
-                    className="session-delete"
-                    title="Delete this session"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeSession(s.id);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <HistoryTab
+          sessionList={sessionList}
+          activeSession={activeSession}
+          onOpenSession={openPastSession}
+          onDeleteSession={removeSession}
+        />
       )}
     </main>
   );

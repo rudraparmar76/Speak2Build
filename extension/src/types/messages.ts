@@ -85,6 +85,32 @@ export type WebviewToHost =
   /** Voice-answers flow: map the transcript onto pending questions. */
   | { type: "mapAnswers"; questions: string[]; transcript: string };
 
+/**
+ * Pipeline stages for live progress reporting (streaming). The webview shows
+ * them as a step strip; the host emits them from the streamed workflow.
+ */
+export type GenerationStage =
+  | "listening"
+  | "transcribing"
+  | "extracting_requirements"
+  | "answering_clarifications"
+  | "reading_context"
+  | "generating"
+  | "validating"
+  | "applying"
+  | "repairing"
+  | "done";
+
+/** Reserved streaming chunk payload (Phase 2.5 activates emission). */
+export type GenerationDeltaKind = "text" | "diff";
+
+/**
+ * RESERVED message types for token streaming. They are part of the contract
+ * in Phase 0 so the UI can render them from day one; the host only starts
+ * EMITTING them in Phase 2.5 (SSE from the backend). Receiving them before
+ * that must be harmless (the webview ignores unknown/unhandled messages).
+ */
+
 export type LlmConfigData = {
   provider: string;
   baseUrl: string;
@@ -258,7 +284,35 @@ export type HostToWebview =
   | { type: "speakingStopped" }
   /** Voice-answers flow intermediates. */
   | { type: "answerTranscript"; text: string }
-  | { type: "answersMapped"; answers: Array<{ question: string; answer: string }>; model: string };
+  | { type: "answersMapped"; answers: Array<{ question: string; answer: string }>; model: string }
+  /**
+   * Streaming progress for the pipeline (Phase 2.5). The webview shows the
+   * current stage in a Copilot-style step strip with an elapsed timer.
+   */
+  | { type: "generationStage"; turnId: string; stage: GenerationStage }
+  /**
+   * Streamed token delta (Phase 2.5). The host batches deltas (~80–100 ms)
+   * so the webview does not flood. `kind: "text"` streams into the message
+   * bubble; `kind: "diff"` grows the inline diff block.
+   */
+  | {
+      type: "generationDelta";
+      turnId: string;
+      kind: GenerationDeltaKind;
+      /** File path for kind "diff"; ignored for kind "text". */
+      filePath?: string;
+      payload: string;
+    }
+  /** Streamed turn finished; the final result message supersedes the deltas. */
+  | { type: "generationDone"; turnId: string }
+  /** Context attach suggestions (Phase 1/3): top scored files for the chips. */
+  | {
+      type: "contextSuggest";
+      turnId: string;
+      files: Array<{ path: string; language?: string }>;
+    }
+  /** Auto-pilot mode changed (Phase 3). */
+  | { type: "modeChanged"; auto: boolean };
 
 /** Minimal typing for the object VS Code injects as `acquireVsCodeApi()`. */
 export interface VsCodeApi {
