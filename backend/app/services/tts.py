@@ -221,23 +221,25 @@ class VoiceSpeaker:
         # Non-blocking: PortAudio drives playback on its own thread.
         self._playback.play(samples, samplerate)
 
-        # Barge-in: start monitoring mic during speech so user can interrupt
-        def _on_barge_in() -> None:
-            with self._lock:
-                self._utterance_counter = 0
-            self._playback.stop()
-
-        try:
-            started = self._barge_in_starter(_on_barge_in)
-            if started:
-                duration = (len(samples) / samplerate) if samplerate else 1.0
-                timer = threading.Timer(duration + 0.4, self._barge_in_stopper)
-                timer.daemon = True
+        # Barge-in: only start if enabled via SPEAK2BUILD_BARGE_IN to prevent speaker feedback loop
+        enable_barge_in = os.environ.get("SPEAK2BUILD_BARGE_IN", "0").lower() in ("1", "true", "yes")
+        if enable_barge_in:
+            def _on_barge_in() -> None:
                 with self._lock:
-                    self._barge_in_timer = timer
-                timer.start()
-        except Exception:
-            pass
+                    self._utterance_counter = 0
+                self._playback.stop()
+
+            try:
+                started = self._barge_in_starter(_on_barge_in)
+                if started:
+                    duration = (len(samples) / samplerate) if samplerate else 1.0
+                    timer = threading.Timer(duration + 0.4, self._barge_in_stopper)
+                    timer.daemon = True
+                    with self._lock:
+                        self._barge_in_timer = timer
+                    timer.start()
+            except Exception:
+                pass
 
         return SpeakResult(
             characters=len(text),

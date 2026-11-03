@@ -1,57 +1,90 @@
-import type { ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 
 import type { ChatMessage } from "../types/chat";
 import type { FileDiff } from "../../types/messages";
 import { DiffBlock } from "./DiffBlock";
 import { TestValidationCard } from "./TestValidationCard";
 
-/**
- * Renders a single chat message as a left- or right-aligned bubble. Handles
- * all message states (sending, thinking, done, error) and embeds diffs,
- * test results, and clarification forms inline. Pure rendering; all mutable
- * state and side-effects are owned by App and passed via props/callbacks.
- */
-
 interface ChatBubbleProps {
   message: ChatMessage;
-  // Diff interaction
   appliedDiffs: Set<string>;
   dismissedDiffs: Set<string>;
   applyingDiff: string | null;
   revertingDiff: string | null;
   applyError: { diff: string; message: string } | null;
   online: boolean;
-  // Diff callbacks
   onApplyDiff: (unifiedDiff: string) => void;
   onRevertDiff: (unifiedDiff: string) => void;
   onViewDiff: (filePath: string, unifiedDiff: string, isNewFile: boolean) => void;
   onDismissDiff: (unifiedDiff: string) => void;
   onApplyAll: (diffs: FileDiff[]) => void;
-  // Test callbacks
   onRunTests: () => void;
   onAutoRepair: () => void;
   runningTests: boolean;
   generating: boolean;
   testFrameworkName: string;
-  // Clarification callbacks
-  clarificationAnswers?: Record<string, string>;
-  onAnswerChange?: (question: string, value: string) => void;
-  onSubmitAnswers?: (answers: Record<string, string>) => void;
 }
 
-/** Stage labels for human-readable display. */
-const STAGE_LABELS: Record<string, string> = {
-  listening: "Listening",
-  transcribing: "Transcribing",
-  extracting_requirements: "Extracting requirements",
-  answering_clarifications: "Answering clarifications",
-  reading_context: "Reading context",
-  generating: "Generating code",
-  validating: "Validating",
-  applying: "Applying changes",
-  repairing: "Repairing",
-  done: "Done",
+const STAGE_CONFIG: Record<
+  string,
+  { label: string; icon: string; activeDesc: string }
+> = {
+  reading_context: {
+    label: "Reading Context",
+    icon: "🔍",
+    activeDesc: "Scanning workspace for relevant context files…",
+  },
+  extracting_requirements: {
+    label: "Requirements",
+    icon: "🧠",
+    activeDesc: "Analyzing requirements & constraints…",
+  },
+  answering_clarifications: {
+    label: "Clarifications",
+    icon: "💬",
+    activeDesc: "Waiting for clarification answers…",
+  },
+  generating: {
+    label: "Generating Code",
+    icon: "⚡",
+    activeDesc: "Generating code diffs with AI model…",
+  },
+  mapping_answers: {
+    label: "Matching your answers",
+    icon: "🔗",
+    activeDesc: "Mapping your spoken reply onto the questions…",
+  },
+  validating: {
+    label: "Validating",
+    icon: "🧪",
+    activeDesc: "Validating syntax & safety checks…",
+  },
+  repairing: {
+    label: "Repairing",
+    icon: "🔧",
+    activeDesc: "Auto-repairing failing tests…",
+  },
+  done: {
+    label: "Done",
+    icon: "✓",
+    activeDesc: "Complete",
+  },
 };
+
+function ElapsedTimer({ startTs }: { startTs: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      setElapsed((Date.now() - startTs) / 1000);
+    };
+    update();
+    const timer = setInterval(update, 200);
+    return () => clearInterval(timer);
+  }, [startTs]);
+
+  return <span className="chat-bubble__timer">⏱ {elapsed.toFixed(1)}s</span>;
+}
 
 function formatTime(timestamp: number): string {
   const d = new Date(timestamp);
@@ -83,9 +116,6 @@ export function ChatBubble({
   runningTests,
   generating,
   testFrameworkName,
-  clarificationAnswers,
-  onAnswerChange,
-  onSubmitAnswers,
 }: ChatBubbleProps): ReactNode {
   const isUser = message.role === "user";
 
@@ -95,7 +125,9 @@ export function ChatBubble({
       <div className="chat-bubble chat-bubble--user">
         <div className="chat-bubble__content">
           {message.source === "voice" && (
-            <span className="chat-bubble__voice-icon" title="Voice input">🎙️</span>
+            <span className="chat-bubble__voice-icon" title="Voice input">
+              🎙️
+            </span>
           )}
           <span className="chat-bubble__text">{message.content}</span>
         </div>
@@ -109,30 +141,57 @@ export function ChatBubble({
     (d) => !appliedDiffs.has(d.unifiedDiff) && !dismissedDiffs.has(d.unifiedDiff),
   );
 
+  const activeStage = message.stages?.find((s, idx, arr) => {
+    return !s.done && arr.slice(0, idx).every((prev) => prev.done);
+  });
+
   return (
     <div className="chat-bubble chat-bubble--assistant">
-      {/* Thinking / progress stages */}
-      {message.status === "thinking" && message.stages && (
-        <div className="chat-bubble__stages">
-          {message.stages.map(({ stage, done }) => (
-            <span
-              key={stage}
-              className={`chat-bubble__stage${done ? " chat-bubble__stage--done" : ""}`}
-            >
-              {done ? "✓" : message.stages!.findIndex((s) => !s.done) === message.stages!.indexOf(
-                message.stages!.find((s) => s.stage === stage)!,
-              ) ? "◉" : "○"}{" "}
-              {STAGE_LABELS[stage] ?? stage}
+      {/* Dynamic Thinking / Progress View */}
+      {message.status === "thinking" && (
+        <div className="chat-bubble__thinking-container">
+          <div className="chat-bubble__thinking-header">
+            <span className="chat-bubble__thinking-spinner" />
+            <span className="chat-bubble__active-desc">
+              {activeStage
+                ? STAGE_CONFIG[activeStage.stage]?.activeDesc || "Working…"
+                : "Thinking…"}
             </span>
-          ))}
-        </div>
-      )}
+            <ElapsedTimer startTs={message.timestamp} />
+          </div>
 
-      {/* Sending / thinking indicator with no stages */}
-      {(message.status === "sending" || (message.status === "thinking" && !message.stages?.length)) && (
-        <div className="chat-bubble__thinking">
-          <span className="chat-bubble__thinking-dots" />
-          Thinking…
+          {/* Shimmer loading bar */}
+          <div className="chat-bubble__shimmer" />
+
+          {/* Pipeline stages list */}
+          {message.stages && message.stages.length > 0 && (
+            <div className="chat-bubble__stages">
+              {message.stages.map(({ stage, done }, index) => {
+                const isCurrent =
+                  !done &&
+                  message.stages!.slice(0, index).every((s) => s.done);
+                const cfg = STAGE_CONFIG[stage] || { label: stage, icon: "•" };
+
+                return (
+                  <span
+                    key={stage}
+                    className={`chat-bubble__stage${
+                      done
+                        ? " chat-bubble__stage--done"
+                        : isCurrent
+                        ? " chat-bubble__stage--active"
+                        : " chat-bubble__stage--pending"
+                    }`}
+                  >
+                    <span className="chat-bubble__stage-icon">
+                      {done ? "✓" : isCurrent ? "◉" : "○"}
+                    </span>
+                    <span className="chat-bubble__stage-name">{cfg.label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -143,8 +202,8 @@ export function ChatBubble({
         </div>
       )}
 
-      {/* Main content text */}
-      {message.content && message.status !== "error" && (
+      {/* Main content text when done */}
+      {message.content && message.status !== "error" && message.status !== "thinking" && (
         <div className="chat-bubble__content">
           <span className="chat-bubble__text">{message.content}</span>
         </div>
@@ -153,40 +212,6 @@ export function ChatBubble({
       {/* Summary */}
       {message.summary && (
         <p className="chat-bubble__summary">{message.summary}</p>
-      )}
-
-      {/* Clarifications */}
-      {message.clarifications && message.clarifications.length > 0 && onAnswerChange && onSubmitAnswers && (
-        <div className="chat-bubble__clarifications">
-          <div className="chat-bubble__clarifications-title">
-            Clarification questions:
-          </div>
-          {message.clarifications.map((c) => (
-            <div key={c.question} className="chat-bubble__clarification-item">
-              <label className="chat-bubble__clarification-label">
-                {c.question}
-                {c.reason && (
-                  <span className="chat-bubble__clarification-reason">
-                    {c.reason}
-                  </span>
-                )}
-              </label>
-              <input
-                className="chat-bubble__clarification-input"
-                type="text"
-                value={clarificationAnswers?.[c.question] ?? c.answer ?? ""}
-                placeholder="Your answer…"
-                onChange={(e) => onAnswerChange(c.question, e.target.value)}
-              />
-            </div>
-          ))}
-          <button
-            className="button"
-            onClick={() => onSubmitAnswers(clarificationAnswers ?? {})}
-          >
-            Submit Answers
-          </button>
-        </div>
       )}
 
       {/* Diffs */}
@@ -254,16 +279,19 @@ export function ChatBubble({
       )}
 
       {/* Footer: model, timing */}
-      {message.status === "done" && (message.model || message.processingSeconds != null) && (
-        <div className="chat-bubble__meta">
-          {message.model && <span className="chat-bubble__model">{message.model}</span>}
-          {message.processingSeconds != null && (
-            <span className="chat-bubble__duration">
-              {formatDuration(message.processingSeconds)}
-            </span>
-          )}
-        </div>
-      )}
+      {message.status === "done" &&
+        (message.model || message.processingSeconds != null) && (
+          <div className="chat-bubble__meta">
+            {message.model && (
+              <span className="chat-bubble__model">{message.model}</span>
+            )}
+            {message.processingSeconds != null && (
+              <span className="chat-bubble__duration">
+                {formatDuration(message.processingSeconds)}
+              </span>
+            )}
+          </div>
+        )}
 
       <span className="chat-bubble__time">{formatTime(message.timestamp)}</span>
     </div>

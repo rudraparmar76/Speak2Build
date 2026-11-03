@@ -41,7 +41,7 @@ class Snippet(BaseModel):
 
 class RelevantRequest(BaseModel):
     requirement_text: str = Field(default="", max_length=8000)
-    file_paths: list[str] = Field(min_length=1, max_length=50)
+    file_paths: list[str] = Field(default_factory=list, max_length=1000)
     workspace_root: str = Field(min_length=1)
     max_snippet_lines: int = 200
     max_total_chars: int = 8000

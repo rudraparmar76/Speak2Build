@@ -24,9 +24,6 @@ interface ChatViewProps {
   generating: boolean;
   testFrameworkName: string;
   onSuggestionClick: (text: string) => void;
-  clarificationAnswers?: Record<string, string>;
-  onAnswerChange?: (question: string, value: string) => void;
-  onSubmitAnswers?: (answers: Record<string, string>) => void;
 }
 
 export function ChatView({
@@ -48,9 +45,6 @@ export function ChatView({
   generating,
   testFrameworkName,
   onSuggestionClick,
-  clarificationAnswers,
-  onAnswerChange,
-  onSubmitAnswers,
 }: ChatViewProps): ReactNode {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -83,9 +77,6 @@ export function ChatView({
             runningTests={runningTests}
             generating={generating}
             testFrameworkName={testFrameworkName}
-            clarificationAnswers={clarificationAnswers}
-            onAnswerChange={onAnswerChange}
-            onSubmitAnswers={onSubmitAnswers}
           />
         ))
       )}

@@ -94,6 +94,7 @@ export type GenerationStage =
   | "transcribing"
   | "extracting_requirements"
   | "answering_clarifications"
+  | "mapping_answers"
   | "reading_context"
   | "generating"
   | "validating"
@@ -122,6 +123,8 @@ export type ClarificationInfo = {
   question: string;
   reason?: string;
   answer?: string | null;
+  /** How this answer was captured (voice chip vs typed edit). */
+  answerSource?: "voice" | "text";
 };
 
 export type RequirementResult = {
@@ -203,6 +206,28 @@ export type SessionHistoryEntry = {
   timestamp: string;
 };
 
+/** A single chat message in the session (for full history restore). */
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  source?: "voice" | "text";
+  stages?: { stage: GenerationStage; done: boolean }[];
+  diffs?: FileDiff[];
+  summary?: string;
+  model?: string;
+  processingSeconds?: number;
+  validated?: boolean;
+  validationErrors?: string[];
+  testErrors?: string[];
+  testsPassed?: boolean;
+  testRunResult?: TestRunResult;
+  clarifications?: ClarificationInfo[];
+  status?: "sending" | "thinking" | "done" | "error";
+  error?: string;
+  timestamp: number;
+};
+
 /**
  * Everything the chat tab should rediscover when VS Code tears the webview
  * down and rebuilds it later. Transient UI state (spinners, inline errors,
@@ -236,6 +261,8 @@ export type SessionSnapshot = {
   dismissedDiffs: string[];
   testRunResult: TestRunResult | null;
   history: SessionHistoryEntry[];
+  /** Full chat message history for complete session restore. */
+  messages: ChatMessage[];
 };
 
 /** One row in the session-history tab. */

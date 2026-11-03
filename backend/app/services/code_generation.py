@@ -407,8 +407,13 @@ def validate_typescript_syntax(content: str, file_path: str, workspace_root: Pat
         command = [node, "--check"]
         temp_suffix = ".js"
 
-    # Write to temp file and run the checker on just this file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=temp_suffix, delete=False) as f:
+    # Write to temp file and run the checker on just this file.
+    # encoding="utf-8" is mandatory: on Windows the locale default (cp1252)
+    # cannot encode characters like U+2011 that LLM-generated code may
+    # contain, which poisoned validation with UnicodeEncodeError.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=temp_suffix, delete=False, encoding="utf-8"
+    ) as f:
         f.write(content)
         temp_path = f.name
     try:
@@ -420,7 +425,7 @@ def validate_typescript_syntax(content: str, file_path: str, workspace_root: Pat
             cmd.extend(["--noEmit", "--skipLibCheck", temp_path])
         else:
             cmd.append(temp_path)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=workspace_root)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=workspace_root)
         if result.returncode != 0:
             return [line for line in result.stdout.splitlines() if file_path in line or temp_path in line]
         return []
@@ -562,7 +567,7 @@ def run_pytest_on_files(
             try:
                 js_result = subprocess.run(
                     [node_bin, "--test"] + js_test_files,
-                    capture_output=True, text=True, timeout=30, cwd=tmp_path
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=tmp_path
                 )
                 if js_result.returncode != 0:
                     out = js_result.stdout + "\n" + js_result.stderr
@@ -578,7 +583,7 @@ def run_pytest_on_files(
             # Run pytest with short timeout
             result = subprocess.run(
                 [python_bin, "-m", "pytest", "-x", "-q", "--tb=short"] + test_files,
-                capture_output=True, text=True, timeout=30, cwd=tmp_path
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=tmp_path
             )
             if result.returncode != 0:
                 output = result.stdout + "\n" + result.stderr
@@ -639,7 +644,7 @@ def validate_diff_applies(diff: str, workspace_root: Path) -> list[str]:
     try:
         result = subprocess.run(
             ["git", "apply", "--check", "--whitespace=nowarn", patch_path],
-            capture_output=True, text=True, timeout=10, cwd=workspace_root
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, cwd=workspace_root
         )
         if result.returncode != 0:
             return [result.stderr.strip() or result.stdout.strip()]
@@ -669,7 +674,7 @@ def apply_diff(diff: str, workspace_root: Path) -> tuple[bool, str, list[str]]:
     try:
         result = subprocess.run(
             ["git", "apply", "--whitespace=nowarn", patch_path],
-            capture_output=True, text=True, timeout=10, cwd=workspace_root
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, cwd=workspace_root
         )
         if result.returncode == 0:
             return True, "Applied successfully", affected
@@ -739,7 +744,7 @@ def revert_diff(diff: str, workspace_root: Path) -> tuple[bool, str, list[str]]:
     try:
         result = subprocess.run(
             ["git", "apply", "--reverse", "--whitespace=nowarn", patch_path],
-            capture_output=True, text=True, timeout=10, cwd=workspace_root
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, cwd=workspace_root
         )
         if result.returncode == 0:
             return True, "Reverted successfully", affected

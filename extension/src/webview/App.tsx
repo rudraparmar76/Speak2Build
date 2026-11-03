@@ -107,6 +107,13 @@ export function App() {
   const [speaking, setSpeaking] = useState(false);
   const speakingTimerRef = useRef<number | null>(null);
 
+  // Clarification answering mode: after the AI speaks the questions aloud,
+  // auto-open the mic so the user can just talk (hands-free answers).
+  const autoListenTimerRef = useRef<number | null>(null);
+  const pendingListenRef = useRef(false);
+  const recorderStateRef = useRef(recorderState);
+  recorderStateRef.current = recorderState;
+
   const pushHistory = useCallback((text: string) => {
     setHistory((items) => [
       { id: Date.now() + Math.random(), text, timestamp: new Date().toLocaleTimeString() },
@@ -124,6 +131,15 @@ export function App() {
       vscode.postMessage({ type: "speak", text: text.slice(0, 1900) });
     },
     [voiceOn],
+  );
+
+  /** Speaks aloud and arms mic auto-open once playback ends. */
+  const speakAndListen = useCallback(
+    (text: string) => {
+      pendingListenRef.current = true;
+      speakText(text);
+    },
+    [speakText],
   );
 
   const stopVoiceNow = useCallback(() => {
@@ -243,9 +259,13 @@ export function App() {
     messages,
     setMessages,
     isProcessing,
+    clarification,
+    awaitingVoiceAnswerRef,
     startPipeline,
     handleContextReceived,
     handleRequirementsReceived,
+    handleVoiceAnswerTranscript,
+    handleAnswersMapped,
     handleClarificationAnswersSubmitted,
     handleGenerationResult,
     handleTestResult,
@@ -257,6 +277,9 @@ export function App() {
     relevantSnippets: relevantResult?.snippets ?? [],
     voiceOn,
     speakText,
+    speakAndListen,
+    onAnswersUpdated: (answers) =>
+      setExtractAnswers((prev) => ({ ...prev, ...answers })),
     postMessage: (msg) => vscode.postMessage(msg),
     pushHistory,
     applyDiff,
@@ -348,6 +371,14 @@ export function App() {
             break;
           }
 
+          // Clarification answering mode: this recording is a spoken reply to
+          // the open questions — map it onto them instead of starting a new
+          // pipeline from scratch.
+          if (awaitingVoiceAnswerRef.current) {
+            handleVoiceAnswerTranscript(message.text);
+            break;
+          }
+
           // Otherwise, auto-run the hands-free pipeline with the transcribed request!
           startPipeline(message.text, "voice");
           break;
@@ -360,6 +391,10 @@ export function App() {
         case "contextRelevant": {
           setRelevantResult(message.result);
           handleContextReceived(message.result.snippets);
+          break;
+        }
+        case "answersMapped": {
+          handleAnswersMapped(message.answers);
           break;
         }
         case "requirements": {
@@ -463,6 +498,21 @@ export function App() {
         case "speakingStarted": {
           setSpeaking(true);
           armSpeakingTimer(message.estimatedSeconds);
+
+          // Clarification answering mode: once playback ends, open the mic so
+          // the user's spoken answers are captured without clicking anything.
+          if (pendingListenRef.current) {
+            pendingListenRef.current = false;
+            if (autoListenTimerRef.current !== null) {
+              window.clearTimeout(autoListenTimerRef.current);
+            }
+            autoListenTimerRef.current = window.setTimeout(() => {
+              autoListenTimerRef.current = null;
+              if (!awaitingVoiceAnswerRef.current) return;
+              if (recorderStateRef.current !== "idle") return;
+              vscode.postMessage({ type: "startRecording" });
+            }, message.estimatedSeconds * 1000 + 1200);
+          }
           break;
         }
         case "speakingStopped": {
@@ -524,6 +574,8 @@ export function App() {
     startPipeline,
     handleContextReceived,
     handleRequirementsReceived,
+    handleVoiceAnswerTranscript,
+    handleAnswersMapped,
     handleGenerationResult,
     handleVoiceCommand,
     handleTestResult,
@@ -556,38 +608,43 @@ export function App() {
     setTestRunResult(snap.testRunResult);
     setHistory(snap.history ?? []);
 
-    // Reconstruct chat feed from restored snapshot
-    const initialMsgs: ChatMessage[] = [];
-    if (snap.transcript?.text) {
-      initialMsgs.push({
-        id: "restored_user",
-        role: "user",
-        content: snap.transcript.text,
-        source: "voice",
-        status: "done",
-        timestamp: Date.now() - 60000,
-      });
+    // Restore full chat message history
+    if (snap.messages && snap.messages.length > 0) {
+      setMessages(snap.messages);
+    } else {
+      // Fallback for old snapshots without messages array
+      const initialMsgs: ChatMessage[] = [];
+      if (snap.transcript?.text) {
+        initialMsgs.push({
+          id: "restored_user",
+          role: "user",
+          content: snap.transcript.text,
+          source: "voice",
+          status: "done",
+          timestamp: Date.now() - 60000,
+        });
+      }
+      if (snap.generationResult || snap.requirement) {
+        initialMsgs.push({
+          id: "restored_asst",
+          role: "assistant",
+          content: snap.generationResult?.summary || snap.requirement?.task || "",
+          diffs: snap.generationResult?.diffs,
+          summary: snap.generationResult?.summary,
+          model: snap.generationResult?.model,
+          processingSeconds: snap.generationResult?.processingSeconds,
+          validated: snap.generationResult?.validated,
+          validationErrors: snap.generationResult?.validationErrors,
+          testErrors: snap.generationResult?.testErrors,
+          testsPassed: snap.generationResult?.testsPassed,
+          testRunResult: snap.testRunResult ?? undefined,
+          clarifications: snap.requirement?.clarifications,
+          status: "done",
+          timestamp: Date.now() - 30000,
+        });
+      }
+      setMessages(initialMsgs);
     }
-    if (snap.generationResult || snap.requirement) {
-      initialMsgs.push({
-        id: "restored_asst",
-        role: "assistant",
-        content: snap.generationResult?.summary || snap.requirement?.task || "",
-        diffs: snap.generationResult?.diffs,
-        summary: snap.generationResult?.summary,
-        model: snap.generationResult?.model,
-        processingSeconds: snap.generationResult?.processingSeconds,
-        validated: snap.generationResult?.validated,
-        validationErrors: snap.generationResult?.validationErrors,
-        testErrors: snap.generationResult?.testErrors,
-        testsPassed: snap.generationResult?.testsPassed,
-        testRunResult: snap.testRunResult ?? undefined,
-        clarifications: snap.requirement?.clarifications,
-        status: "done",
-        timestamp: Date.now() - 30000,
-      });
-    }
-    setMessages(initialMsgs);
 
     window.setTimeout(() => {
       restoringRef.current = false;
@@ -613,6 +670,7 @@ export function App() {
         dismissedDiffs: Array.from(dismissedDiffs),
         testRunResult,
         history: [],
+        messages,
       };
       vscode.postMessage({ type: "saveSessionState", snapshot });
     }, 500);
@@ -630,6 +688,7 @@ export function App() {
     appliedDiffs,
     dismissedDiffs,
     testRunResult,
+    messages,
   ]);
 
   // Elapsed recording timer
@@ -797,9 +856,6 @@ export function App() {
         generating={isProcessing}
         testFrameworkName={testFramework.name}
         onSuggestionClick={handleSuggestionClick}
-        clarificationAnswers={extractAnswers}
-        onAnswerChange={(q, a) => setExtractAnswers((prev) => ({ ...prev, [q]: a }))}
-        onSubmitAnswers={(ans) => handleClarificationAnswersSubmitted(ans)}
       />
 
       {/* 5. Sticky Chat Input Bar */}

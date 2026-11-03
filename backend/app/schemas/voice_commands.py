@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class CommandClassifyRequest(BaseModel):
     """Spoken transcript to check for voice command intents."""
 
-    transcript: str = Field(min_length=1, max_length=1000)
+    transcript: str = Field(default="", max_length=1000)
 
 
 class CommandClassifyResponse(BaseModel):
@@ -21,4 +21,3 @@ class CommandClassifyResponse(BaseModel):
         default="",
         description="Spoken confirmation to speak aloud to the developer",
     )
-
