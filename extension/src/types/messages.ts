@@ -252,7 +252,7 @@ export type HostToWebview =
   | { type: "recordingStarted"; sampleRate: number; channels: number }
   | { type: "recordingCancelled" }
   | { type: "audioUploaded"; audioId: string; durationSeconds: number; sampleRate: number; channels: number; sizeBytes: number }
-  | { type: "transcription"; audioId: string; language?: string; text: string; segments: Array<{ start: number; end: number; text: string }>; durationSeconds: number; processingSeconds: number }
+  | { type: "transcription"; audioId: string; language?: string; text: string; segments: Array<{ start: number; end: number; text: string }>; durationSeconds: number; processingSeconds: number; isCommand?: boolean }
   | { type: "requirements"; requirement: RequirementResult; model: string; processingSeconds: number; repaired: boolean }
   | { type: "contextScan"; result: ScanResult }
   | { type: "contextRelevant"; result: RelevantResult }
