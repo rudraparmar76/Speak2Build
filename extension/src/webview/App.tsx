@@ -284,6 +284,18 @@ const generationResultRef = useRef<GenerationResult | null>(null);
           );
           break;
         }
+        case "bargeInTriggered": {
+          setRecorderState("recording");
+          setElapsedMs(0);
+          setRecorderError(null);
+          setSpeaking(false);
+          if (speakingTimerRef.current !== null) {
+            window.clearTimeout(speakingTimerRef.current);
+            speakingTimerRef.current = null;
+          }
+          pushHistory("🎙️ Voice barge-in detected! Interrupted AI playback and recording your speech...");
+          break;
+        }
         case "audioUploaded": {
           // The dedicated voice-answers recording must NOT clobber the main
           // transcript flow — route it into the answer state machine instead.

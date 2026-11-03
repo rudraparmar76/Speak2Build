@@ -41,6 +41,75 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private readonly sessions: SessionStore;
+  private bargeInPollTimer?: NodeJS.Timeout;
+
+  private getClient(): BackendClient {
+    return new BackendClient(this.getBackendUrl());
+  }
+
+  private bargeInSessionActive = false;
+
+  private startBargeInPolling(maxDurationMs: number): void {
+    this.stopBargeInPolling();
+    this.bargeInSessionActive = false;
+    const startTime = Date.now();
+    const interval = 200;
+    this.bargeInPollTimer = setInterval(async () => {
+      if (!this.bargeInSessionActive && Date.now() - startTime > maxDurationMs) {
+        this.stopBargeInPolling();
+        return;
+      }
+      try {
+        const client = this.getClient();
+        const status = await client.getBargeInStatus();
+        if (status.barge_in_triggered && !this.bargeInSessionActive) {
+          this.bargeInSessionActive = true;
+          this.post({ type: "speakingStopped" });
+          this.post({ type: "bargeInTriggered" });
+        }
+        if (status.auto_audio_id) {
+          this.stopBargeInPolling();
+          const audioId = status.auto_audio_id;
+          const duration = status.duration_seconds || 1.5;
+          this.post({
+            type: "audioUploaded",
+            audioId,
+            durationSeconds: duration,
+            sampleRate: 16000,
+            channels: 1,
+            sizeBytes: 0,
+          });
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    }, interval);
+  }
+
+  private stopBargeInPolling(): void {
+    if (this.bargeInPollTimer) {
+      clearInterval(this.bargeInPollTimer);
+      this.bargeInPollTimer = undefined;
+    }
+  }
+
+  private async speakUtterance(text: string, voice?: string): Promise<void> {
+    try {
+      const client = this.getClient();
+      const result = await client.speak(text, voice);
+      this.post({
+        type: "speakingStarted",
+        characters: result.characters,
+        estimatedSeconds: result.duration_seconds,
+        voice: result.voice,
+      });
+      const pollDuration = Math.max((result.duration_seconds + 1.0) * 1000, 3000);
+      this.startBargeInPolling(pollDuration);
+    } catch {
+      // best-effort
+    }
+  }
+
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -145,7 +214,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
                 feedbackSpeech: command.feedback_speech,
               });
               if (command.feedback_speech) {
-                await client.speak(command.feedback_speech).catch(() => {});
+                await this.speakUtterance(command.feedback_speech).catch(() => {});
               }
             }
           } catch {
@@ -398,7 +467,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
                 testsPassed: repairResult.tests_passed,
               },
             });
-            await client.speak(repairResult.summary).catch(() => {});
+            await this.speakUtterance(repairResult.summary).catch(() => {});
           } catch (error) {
             this.post({
               type: "hostError",
@@ -606,16 +675,11 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "speak": {
-          const result = await client.speak(message.text, message.voice);
-          this.post({
-            type: "speakingStarted",
-            characters: result.characters,
-            estimatedSeconds: result.duration_seconds,
-            voice: result.voice,
-          });
+          await this.speakUtterance(message.text, message.voice);
           break;
         }
         case "stopSpeaking": {
+          this.stopBargeInPolling();
           await client.stopSpeaking();
           this.post({ type: "speakingStopped" });
           break;

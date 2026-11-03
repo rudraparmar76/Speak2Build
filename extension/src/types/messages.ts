@@ -235,6 +235,7 @@ export type HostToWebview =
   | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[] }
   | { type: "testRunResult"; result: TestRunResult }
   | { type: "voiceCommandExecuted"; action: string; feedbackSpeech: string }
+  | { type: "bargeInTriggered" }
 
   | { type: "testFrameworkDetected"; framework: string; name: string }
   | { type: "llmConfigResult"; config: LlmConfigData }

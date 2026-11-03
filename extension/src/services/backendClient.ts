@@ -151,6 +151,14 @@ export interface SpeakResponse {
   rate: string;
 }
 
+export interface BargeInStatusResponse {
+  barge_in_active: boolean;
+  barge_in_triggered: boolean;
+  state: string;
+  auto_audio_id?: string | null;
+  duration_seconds?: number;
+}
+
 export interface StopSpeakResponse {
   stopped: boolean;
 }
@@ -498,6 +506,16 @@ export class BackendClient {
       "/api/tts/stop",
       { method: "POST" },
       REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /** Check voice barge-in status during TTS speech playback. */
+  async getBargeInStatus(): Promise<BargeInStatusResponse> {
+    return await this.request<BargeInStatusResponse>(
+      "GET",
+      "/api/recording/barge-in-status",
+      undefined,
+      1000,
     );
   }
 

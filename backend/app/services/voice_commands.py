@@ -58,9 +58,9 @@ def classify_voice_command(transcript: str) -> CommandMatch:
         return CommandMatch(is_command=False, action="none", confidence=0.0, feedback_speech="")
 
     # 1. APPLY DIFF COMMANDS
-    # Matches: "apply", "apply it", "apply changes", "looks good apply it", "accept changes", "yes apply"
+    # Matches: "apply", "apply it", "apply changes", "apply the changes", "apply the chages", "looks good apply it", "can you apply", "accept changes", "yes apply"
     apply_patterns = [
-        r"^(?:please\s+)?(?:yes\s+)?(?:looks?\s+good\s+)?(?:apply|accept)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|them))?$",
+        r"^(?:please\s+|yes\s+|can\s+you\s+|go\s+ahead\s+and\s+)?(?:looks?\s+good\s+)?(?:apply|accept)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?chages?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
         r"^(?:looks?\s+good|confirmed?|accept\s+changes?)$",
     ]
     for pat in apply_patterns:
@@ -77,7 +77,7 @@ def classify_voice_command(transcript: str) -> CommandMatch:
     # 2. REVERT DIFF COMMANDS
     # Matches: "revert", "revert it", "revert changes", "undo", "undo changes", "rollback", "discard"
     revert_patterns = [
-        r"^(?:please\s+)?(?:revert|undo|rollback|discard)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|them))?$",
+        r"^(?:please\s+|can\s+you\s+)?(?:revert|undo|rollback|discard)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
     ]
     for pat in revert_patterns:
         if re.match(pat, clean):
@@ -91,7 +91,7 @@ def classify_voice_command(transcript: str) -> CommandMatch:
     # 3. RUN TESTS COMMANDS
     # Matches: "run tests", "run workspace tests", "test it", "check tests", "run the tests"
     test_patterns = [
-        r"^(?:please\s+)?(?:run|execute|check)\s+(?:the\s+)?(?:workspace\s+)?tests?$",
+        r"^(?:please\s+|can\s+you\s+)?(?:run|execute|check)\s+(?:the\s+)?(?:workspace\s+)?tests?(?:\s+please|\s+now)?$",
         r"^(?:test\s+it|run\s+tests?|check\s+the\s+tests?)$",
     ]
     for pat in test_patterns:
@@ -106,7 +106,7 @@ def classify_voice_command(transcript: str) -> CommandMatch:
     # 4. AUTO REPAIR COMMANDS
     # Matches: "fix it", "auto repair", "repair tests", "fix the tests", "yes fix it", "repair code"
     repair_patterns = [
-        r"^(?:please\s+)?(?:yes\s+)?(?:auto[- ]?)?(?:fix|repair)(?:\s+(?:it|the\s+tests?|errors?|code|them))?$",
+        r"^(?:please\s+|can\s+you\s+|yes\s+)?(?:auto[- ]?)?(?:fix|repair)(?:\s+(?:it|the\s+tests?|errors?|code|them))?(?:\s+please|\s+now)?$",
         r"^(?:yes\s+please|yes\s+fix|auto\s+repair\s+tests?)$",
     ]
     for pat in repair_patterns:

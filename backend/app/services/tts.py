@@ -21,13 +21,14 @@ import asyncio
 import io
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import av
 import numpy as np
 import sounddevice as sd
 
-from app.services import voice_local
+from app.services import recorder, voice_local
 
 VOICE_ENV = "SPEAK2BUILD_TTS_VOICE"
 RATE_ENV = "SPEAK2BUILD_TTS_RATE"
@@ -159,18 +160,30 @@ class VoiceSpeaker:
         synthesizer=None,
         decode=None,
         playback: PlaybackController | None = None,
+        barge_in_starter: Callable[[Callable[[], None]], bool] | None = None,
+        barge_in_stopper: Callable[[], None] | None = None,
     ) -> None:
         self._synthesize = synthesizer or _hybrid_synthesize
         self._decode = decode or _default_decode
         self._playback = playback or PlaybackController()
+        self._barge_in_starter = barge_in_starter if barge_in_starter is not None else recorder.start_barge_in
+        self._barge_in_stopper = barge_in_stopper if barge_in_stopper is not None else recorder.stop_barge_in
         self._lock = threading.Lock()
         self._utterance_counter = 0
+        self._barge_in_timer: threading.Timer | None = None
 
     def stop(self) -> bool:
         with self._lock:
             was_playing = self._utterance_counter > 0
             self._utterance_counter = 0
+            if self._barge_in_timer is not None:
+                self._barge_in_timer.cancel()
+                self._barge_in_timer = None
         self._playback.stop()
+        try:
+            self._barge_in_stopper()
+        except Exception:
+            pass
         return was_playing
 
     async def speak(self, text: str, voice: str | None = None, rate: str | None = None) -> SpeakResult:
@@ -185,6 +198,14 @@ class VoiceSpeaker:
 
         with self._lock:
             self._utterance_counter += 1
+            if self._barge_in_timer is not None:
+                self._barge_in_timer.cancel()
+                self._barge_in_timer = None
+
+        try:
+            self._barge_in_stopper()
+        except Exception:
+            pass
 
         # Synthesis: local Piper returns (samples, rate) directly; the cloud
         # engine returns MP3 bytes that still need decoding.
@@ -199,6 +220,24 @@ class VoiceSpeaker:
 
         # Non-blocking: PortAudio drives playback on its own thread.
         self._playback.play(samples, samplerate)
+
+        # Barge-in: start monitoring mic during speech so user can interrupt
+        def _on_barge_in() -> None:
+            with self._lock:
+                self._utterance_counter = 0
+            self._playback.stop()
+
+        try:
+            started = self._barge_in_starter(_on_barge_in)
+            if started:
+                duration = (len(samples) / samplerate) if samplerate else 1.0
+                timer = threading.Timer(duration + 0.4, self._barge_in_stopper)
+                timer.daemon = True
+                with self._lock:
+                    self._barge_in_timer = timer
+                timer.start()
+        except Exception:
+            pass
 
         return SpeakResult(
             characters=len(text),

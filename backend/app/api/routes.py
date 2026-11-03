@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.schemas.audio import AudioUploadResponse, RecordingStartResponse
+from app.schemas.audio import AudioUploadResponse, BargeInStatusResponse, RecordingStartResponse
 from app.schemas.common import (
     HealthResponse,
     PingRequest,
@@ -268,6 +268,20 @@ def cancel_recording() -> None:
         return None
     return None
 
+
+
+
+@router.get("/api/recording/barge-in-status", response_model=BargeInStatusResponse)
+def get_barge_in_status() -> BargeInStatusResponse:
+    """Check whether voice barge-in is currently monitoring or was triggered."""
+    auto_res = audio_recorder.get_auto_result()
+    return BargeInStatusResponse(
+        barge_in_active=audio_recorder.is_barge_in_active(),
+        barge_in_triggered=audio_recorder.is_barge_in_triggered(),
+        state=audio_recorder.state(),
+        auto_audio_id=auto_res.audio_id if auto_res else None,
+        duration_seconds=auto_res.duration_seconds if auto_res else 0.0,
+    )
 
 @router.post("/api/transcribe", response_model=TranscriptionResponse)
 def transcribe(payload: TranscribeRequest) -> TranscriptionResponse:
