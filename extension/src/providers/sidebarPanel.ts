@@ -471,10 +471,33 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           const result = await client.applyDiff(message.unifiedDiff, workspaceRoot);
           this.post({
             type: "diffApplied",
+            unifiedDiff: message.unifiedDiff,
             success: result.success,
             message: result.message,
             affectedFiles: result.affected_files,
           });
+          break;
+        }
+        case "applyAllDiffs": {
+          const folders = vscode.workspace.workspaceFolders;
+          if (!folders || folders.length === 0) {
+            this.post({
+              type: "hostError",
+              message: "No workspace folder open.",
+            });
+            return;
+          }
+          const workspaceRoot = folders[0].uri.fsPath;
+          for (const unifiedDiff of message.diffs) {
+            const result = await client.applyDiff(unifiedDiff, workspaceRoot);
+            this.post({
+              type: "diffApplied",
+              unifiedDiff,
+              success: result.success,
+              message: result.message,
+              affectedFiles: result.affected_files,
+            });
+          }
           break;
         }
         case "revertDiff": {
@@ -490,6 +513,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           const result = await client.revertDiff(message.unifiedDiff, workspaceRoot);
           this.post({
             type: "diffReverted",
+            unifiedDiff: message.unifiedDiff,
             success: result.success,
             message: result.message,
             affectedFiles: result.affected_files,

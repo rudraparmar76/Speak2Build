@@ -31,6 +31,8 @@ export type WebviewToHost =
   | { type: "generateCode"; requirementText: string; contextSnippets: Snippet[]; options?: Record<string, unknown> }
   /** Apply a unified diff to the workspace. */
   | { type: "applyDiff"; unifiedDiff: string; workspaceRoot: string }
+  /** Apply multiple unified diffs sequentially to the workspace. */
+  | { type: "applyAllDiffs"; diffs: string[] }
   /** Revert an applied unified diff in the workspace. */
   | { type: "revertDiff"; unifiedDiff: string; workspaceRoot: string }
   /** Open proposed diff in VS Code native side-by-side diff editor. */
@@ -288,8 +290,8 @@ export type HostToWebview =
   | { type: "contextScan"; result: ScanResult }
   | { type: "contextRelevant"; result: RelevantResult }
   | { type: "generationResult"; result: GenerationResult }
-  | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[] }
-  | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[] }
+  | { type: "diffApplied"; success: boolean; message: string; affectedFiles: string[]; unifiedDiff?: string }
+  | { type: "diffReverted"; success: boolean; message: string; affectedFiles: string[]; unifiedDiff?: string }
   | { type: "testRunResult"; result: TestRunResult }
   | { type: "voiceCommandExecuted"; action: string; feedbackSpeech: string }
   | { type: "bargeInTriggered" }

@@ -27,6 +27,7 @@ export interface PipelineOptions {
   postMessage: (msg: any) => void;
   pushHistory: (entry: string) => void;
   applyDiff: (diff: string) => void;
+  applyAllDiffs?: (diffs: string[]) => void;
   revertDiff: (diff: string) => void;
   dismissDiff?: (diff: string) => void;
   runWorkspaceTests: () => void;
@@ -90,6 +91,7 @@ export function usePipeline(options: PipelineOptions) {
     postMessage,
     pushHistory,
     applyDiff,
+    applyAllDiffs,
     revertDiff,
     dismissDiff,
     runWorkspaceTests,
@@ -575,8 +577,12 @@ export function usePipeline(options: PipelineOptions) {
       switch (action) {
         case "apply": {
           const pending = activeDiffs.filter((d) => !appliedDiffs.has(d.unifiedDiff));
-          for (const diff of pending) {
-            applyDiff(diff.unifiedDiff);
+          if (applyAllDiffs && pending.length > 1) {
+            applyAllDiffs(pending.map((d) => d.unifiedDiff));
+          } else {
+            for (const diff of pending) {
+              applyDiff(diff.unifiedDiff);
+            }
           }
           break;
         }
@@ -609,7 +615,7 @@ export function usePipeline(options: PipelineOptions) {
         }
       }
     },
-    [pushHistory, applyDiff, revertDiff, dismissDiff, runWorkspaceTests, triggerAutoRepair, createNewSession],
+    [pushHistory, applyDiff, applyAllDiffs, revertDiff, dismissDiff, runWorkspaceTests, triggerAutoRepair, createNewSession],
   );
 
   return {

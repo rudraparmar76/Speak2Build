@@ -223,13 +223,18 @@ export function App() {
     setDismissedDiffs((prev) => new Set(prev).add(unifiedDiff));
   }, []);
 
+  const applyAllDiffs = useCallback((diffs: string[]) => {
+    vscode.postMessage({
+      type: "applyAllDiffs",
+      diffs,
+    });
+  }, []);
+
   const handleApplyAll = useCallback(
     (diffsToApply: FileDiff[]) => {
-      for (const d of diffsToApply) {
-        applyDiff(d.unifiedDiff);
-      }
+      applyAllDiffs(diffsToApply.map((d) => d.unifiedDiff));
     },
-    [applyDiff],
+    [applyAllDiffs],
   );
 
   const runWorkspaceTests = useCallback(() => {
@@ -293,12 +298,16 @@ export function App() {
     postMessage: (msg) => vscode.postMessage(msg),
     pushHistory,
     applyDiff,
+    applyAllDiffs,
     revertDiff,
     dismissDiff,
     runWorkspaceTests,
     triggerAutoRepair,
     createNewSession,
   });
+
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   // Send typed message
   const handleSendMessage = useCallback(() => {
@@ -441,25 +450,25 @@ export function App() {
           break;
         }
         case "diffApplied": {
-          const currentDiff = applyingDiffRef.current;
+          const appliedTarget = message.unifiedDiff || applyingDiffRef.current;
           setApplyingDiff(null);
           if (message.success) {
-            if (currentDiff) {
-              setAppliedDiffs((prev) => new Set(prev).add(currentDiff));
+            if (appliedTarget) {
+              setAppliedDiffs((prev) => new Set(prev).add(appliedTarget));
             }
             setApplyError(null);
             pushHistory(`Applied: ${message.affectedFiles.join(", ")}`);
           } else {
             setApplyError(
-              currentDiff
-                ? { diff: currentDiff, message: message.message }
+              appliedTarget
+                ? { diff: appliedTarget, message: message.message }
                 : { diff: "", message: message.message },
             );
           }
           break;
         }
         case "diffReverted": {
-          const target = revertingDiffRef.current;
+          const target = message.unifiedDiff || revertingDiffRef.current;
           setRevertingDiff(null);
           if (message.success) {
             if (target) {
@@ -476,7 +485,7 @@ export function App() {
         case "voiceCommandExecuted": {
           let diffs = generationResultRef.current?.diffs ?? [];
           if (diffs.length === 0) {
-            diffs = messages.flatMap((m) => m.diffs ?? []);
+            diffs = messagesRef.current.flatMap((m) => m.diffs ?? []);
           }
           handleVoiceCommand(message.action, message.feedbackSpeech, diffs, appliedDiffsRef.current);
           break;
