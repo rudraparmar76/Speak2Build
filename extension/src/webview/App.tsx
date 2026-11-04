@@ -1030,7 +1030,15 @@ export function App() {
       />
 
       {/* 6. First-time walkthrough tour */}
-      <TourModal isOpen={showTour} onClose={handleCloseTour} />
+      <TourModal
+        isOpen={showTour}
+        onClose={handleCloseTour}
+        onOpenSettings={() => {
+          setShowSettings(true);
+          setShowHistory(false);
+          vscode.postMessage({ type: "getLlmConfig" });
+        }}
+      />
     </main>
   );
 }

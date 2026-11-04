@@ -3,6 +3,7 @@ import { useState, useEffect, type ReactNode } from "react";
 interface TourModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenSettings?: () => void;
 }
 
 interface TourStep {
@@ -12,11 +13,12 @@ interface TourStep {
   icon: string;
   description: string;
   tips: string[];
+  isSettingsStep?: boolean;
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
-    badge: "Step 1 of 5",
+    badge: "Step 1 of 6",
     icon: "🚀",
     title: "Welcome to Speak2Build",
     subtitle: "Hands-free, voice-first AI pair programmer in VS Code",
@@ -28,7 +30,21 @@ const TOUR_STEPS: TourStep[] = [
     ],
   },
   {
-    badge: "Step 2 of 5",
+    badge: "Step 2 of 6",
+    icon: "⚙️",
+    title: "Connect Your LLM Provider & API Key",
+    subtitle: "Configure OpenAI, OpenRouter, Groq, Anthropic, or Local Ollama",
+    description:
+      "Before coding, set up your preferred AI model! Click the ⚙️ Settings gear in the header bar to select your provider, paste your API key, and test your connection in one click.",
+    tips: [
+      "Supports OpenAI (GPT-4o), OpenRouter, Groq (ultra-fast), and local Ollama.",
+      "Click 'Test Connection' in Settings to verify your API key and latency.",
+      "Your API key is securely saved directly in your VS Code workspace.",
+    ],
+    isSettingsStep: true,
+  },
+  {
+    badge: "Step 3 of 6",
     icon: "🎤",
     title: "Editable Voice & Text Input",
     subtitle: "Voice speech is transcribed directly into the input for easy editing",
@@ -40,7 +56,7 @@ const TOUR_STEPS: TourStep[] = [
     ],
   },
   {
-    badge: "Step 3 of 5",
+    badge: "Step 4 of 6",
     icon: "🧠",
     title: "Smart Workspace Context",
     subtitle: "Autonomous context crawling without unnecessary clarification questions",
@@ -52,7 +68,7 @@ const TOUR_STEPS: TourStep[] = [
     ],
   },
   {
-    badge: "Step 4 of 5",
+    badge: "Step 5 of 6",
     icon: "⚡",
     title: "Inline Diff Review & Voice Actions",
     subtitle: "Review changes directly in chat and control them hands-free",
@@ -64,7 +80,7 @@ const TOUR_STEPS: TourStep[] = [
     ],
   },
   {
-    badge: "Step 5 of 5",
+    badge: "Step 6 of 6",
     icon: "🧪",
     title: "Testing & AI Auto-Repair",
     subtitle: "Run workspace tests and repair failures automatically",
@@ -77,7 +93,7 @@ const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export function TourModal({ isOpen, onClose }: TourModalProps): ReactNode {
+export function TourModal({ isOpen, onClose, onOpenSettings }: TourModalProps): ReactNode {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
@@ -130,6 +146,22 @@ export function TourModal({ isOpen, onClose }: TourModalProps): ReactNode {
 
         <div className="tour-modal__body">
           <p className="tour-modal__desc">{currentStep.description}</p>
+          
+          {currentStep.isSettingsStep && onOpenSettings && (
+            <div style={{ textAlign: "center", margin: "2px 0 6px 0" }}>
+              <button
+                type="button"
+                className="tour-btn tour-btn--settings-shortcut"
+                onClick={() => {
+                  onClose();
+                  onOpenSettings();
+                }}
+              >
+                ⚙️ Open LLM Settings Now
+              </button>
+            </div>
+          )}
+
           <div className="tour-modal__tips">
             {currentStep.tips.map((tip, i) => (
               <div key={i} className="tour-modal__tip">
@@ -182,4 +214,3 @@ export function TourModal({ isOpen, onClose }: TourModalProps): ReactNode {
     </div>
   );
 }
-

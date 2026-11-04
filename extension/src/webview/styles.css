@@ -1638,3 +1638,20 @@ body {
 .tour-btn--primary:hover {
   background: var(--vscode-button-hoverBackground, #1177bb);
 }
+
+.tour-btn--settings-shortcut {
+  background: rgba(0, 122, 204, 0.15);
+  border: 1px solid rgba(0, 122, 204, 0.4);
+  color: var(--vscode-textLink-foreground, #3794ff);
+  padding: 6px 14px;
+  font-size: 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.tour-btn--settings-shortcut:hover {
+  background: rgba(0, 122, 204, 0.25);
+  border-color: var(--vscode-textLink-foreground, #3794ff);
+}
