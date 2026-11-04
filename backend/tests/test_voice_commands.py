@@ -12,6 +12,12 @@ def test_classify_apply_commands():
     assert classify_voice_command("looks good, apply it!").action == "apply"
     assert classify_voice_command("yes apply").action == "apply"
     assert classify_voice_command("accept changes").action == "apply"
+    assert classify_voice_command("accept all").action == "apply"
+    assert classify_voice_command("accept all changes").action == "apply"
+    assert classify_voice_command("accept all diffs").action == "apply"
+    assert classify_voice_command("accept them all").action == "apply"
+    assert classify_voice_command("apply all changes").action == "apply"
+    assert classify_voice_command("apply all diffs").action == "apply"
 
 
 def test_classify_revert_commands():
@@ -32,6 +38,12 @@ def test_classify_reject_commands():
     assert classify_voice_command("no reject").action == "reject"
     assert classify_voice_command("don't apply").action == "reject"
     assert classify_voice_command("do not apply it").action == "reject"
+    assert classify_voice_command("reject all changes").action == "reject"
+    assert classify_voice_command("reject all diffs").action == "reject"
+    assert classify_voice_command("reject them all").action == "reject"
+    assert classify_voice_command("dismiss all changes").action == "reject"
+    assert classify_voice_command("don't accept").action == "reject"
+    assert classify_voice_command("no").action == "reject"
 
 
 def test_classify_run_tests_commands():

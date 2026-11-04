@@ -474,7 +474,10 @@ export function App() {
           break;
         }
         case "voiceCommandExecuted": {
-          const diffs = generationResultRef.current?.diffs ?? [];
+          let diffs = generationResultRef.current?.diffs ?? [];
+          if (diffs.length === 0) {
+            diffs = messages.flatMap((m) => m.diffs ?? []);
+          }
           handleVoiceCommand(message.action, message.feedbackSpeech, diffs, appliedDiffsRef.current);
           break;
         }

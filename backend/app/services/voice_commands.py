@@ -62,10 +62,12 @@ def classify_voice_command(transcript: str) -> CommandMatch:
         return CommandMatch(is_command=False, action="none", confidence=0.0, feedback_speech="")
 
     # 1. APPLY DIFF COMMANDS
-    # Matches: "apply", "apply it", "apply changes", "apply the changes", "apply the chages", "looks good apply it", "can you apply", "accept changes", "yes apply"
+    # Matches: "apply", "apply it", "apply all", "apply all changes", "apply all diffs",
+    #          "accept", "accept all", "accept all changes", "accept all diffs", "accept them all",
+    #          "looks good apply it", "looks good accept all", "yes apply", "confirm", "except all"
     apply_patterns = [
-        r"^(?:please\s+|yes\s+|can\s+you\s+|go\s+ahead\s+and\s+)?(?:looks?\s+good\s+)?(?:apply|accept)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?chages?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
-        r"^(?:looks?\s+good|confirmed?|accept\s+changes?)$",
+        r"^(?:please\s+|yes\s+|yeah\s+|yep\s+|sure\s+|can\s+you\s+|go\s+ahead\s+and\s+)?(?:looks?\s+good\s+(?:to\s+me\s+)?|looks?\s+great\s+)?(?:apply|accept|except)(?:\s+(?:it|all|everything|both|them|them\s+all|all\s+of\s+them|(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:changes?|diffs?|code)))?(?:\s+please|\s+now|\s+thanks)?$",
+        r"^(?:looks?\s+good(?:\s+to\s+me)?|looks?\s+great|confirmed?|accept\s+(?:all\s+)?changes?)$",
     ]
     for pat in apply_patterns:
         if re.match(pat, clean):
@@ -79,9 +81,9 @@ def classify_voice_command(transcript: str) -> CommandMatch:
                 )
 
     # 2. REVERT DIFF COMMANDS
-    # Matches: "revert", "revert it", "revert changes", "undo", "undo changes", "rollback", "discard"
+    # Matches: "revert", "revert it", "revert all", "revert changes", "undo", "undo changes", "rollback"
     revert_patterns = [
-        r"^(?:please\s+|can\s+you\s+)?(?:revert|undo|rollback|discard)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
+        r"^(?:please\s+|can\s+you\s+)?(?:revert|undo|rollback|discard)(?:\s+(?:it|all|everything|both|them|them\s+all|all\s+of\s+them|(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:changes?|diffs?|code)))?(?:\s+please|\s+now|\s+thanks)?$",
     ]
     for pat in revert_patterns:
         if re.match(pat, clean):
@@ -93,10 +95,13 @@ def classify_voice_command(transcript: str) -> CommandMatch:
             )
 
     # 2b. REJECT DIFF COMMANDS
-    # Matches: "reject", "reject it", "reject all", "reject changes", "dismiss", "no reject", "don't apply"
+    # Matches: "reject", "reject it", "reject all", "reject changes", "reject all changes",
+    #          "reject all diffs", "reject them all", "dismiss", "dismiss all", "dismiss all changes",
+    #          "discard", "discard all", "don't apply", "don't apply it", "don't accept", "no"
     reject_patterns = [
-        r"^(?:please\s+|can\s+you\s+|no\s+)?(?:reject|dismiss)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
-        r"^(?:don't\s+apply(?:\s+it)?|do\s+not\s+apply(?:\s+it)?)$",
+        r"^(?:please\s+|can\s+you\s+|no\s+|nah\s+|nope\s+)?(?:reject|dismiss)(?:\s+(?:it|all|everything|both|them|them\s+all|all\s+of\s+them|(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:changes?|diffs?|code)))?(?:\s+please|\s+now|\s+thanks)?$",
+        r"^(?:no\s+)?(?:don't|do\s+not)\s+(?:apply|accept)(?:\s+(?:it|all|everything|both|them|them\s+all|(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:changes?|diffs?|code)))?$",
+        r"^(?:no|nope|nah)(?:\s+reject(?:\s+all)?)?$",
     ]
     for pat in reject_patterns:
         if re.match(pat, clean):
