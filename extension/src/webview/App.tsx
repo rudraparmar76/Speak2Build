@@ -381,16 +381,27 @@ export function App() {
             break;
           }
 
+          const trimmed = (message.text || "").trim();
+          if (!trimmed) {
+            break;
+          }
+
           // Clarification answering mode: this recording is a spoken reply to
           // the open questions — map it onto them instead of starting a new
           // pipeline from scratch.
           if (awaitingVoiceAnswerRef.current) {
-            handleVoiceAnswerTranscript(message.text);
+            handleVoiceAnswerTranscript(trimmed);
+            break;
+          }
+
+          // Guard against running parallel pipelines if already in progress
+          if (isProcessing) {
+            console.warn("Pipeline already in progress, ignoring duplicate transcription:", trimmed);
             break;
           }
 
           // Otherwise, auto-run the hands-free pipeline with the transcribed request!
-          startPipeline(message.text, "voice");
+          startPipeline(trimmed, "voice");
           break;
         }
         case "recordingCancelled": {
@@ -509,19 +520,22 @@ export function App() {
           setSpeaking(true);
           armSpeakingTimer(message.estimatedSeconds);
 
-          // Clarification answering mode: once playback ends, open the mic so
-          // the user's spoken answers are captured without clicking anything.
+          // Clarification answering mode: only in push-to-talk mode do we need to
+          // open the mic automatically. In Always-Listening mode, Silero VAD is
+          // already running and will auto-detect speech once TTS finishes!
           if (pendingListenRef.current) {
             pendingListenRef.current = false;
-            if (autoListenTimerRef.current !== null) {
-              window.clearTimeout(autoListenTimerRef.current);
+            if (!autoListen) {
+              if (autoListenTimerRef.current !== null) {
+                window.clearTimeout(autoListenTimerRef.current);
+              }
+              autoListenTimerRef.current = window.setTimeout(() => {
+                autoListenTimerRef.current = null;
+                if (!awaitingVoiceAnswerRef.current) return;
+                if (recorderStateRef.current !== "idle") return;
+                vscode.postMessage({ type: "startRecording" });
+              }, message.estimatedSeconds * 1000 + 1200);
             }
-            autoListenTimerRef.current = window.setTimeout(() => {
-              autoListenTimerRef.current = null;
-              if (!awaitingVoiceAnswerRef.current) return;
-              if (recorderStateRef.current !== "idle") return;
-              vscode.postMessage({ type: "startRecording" });
-            }, message.estimatedSeconds * 1000 + 1200);
           }
           break;
         }

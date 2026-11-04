@@ -182,6 +182,11 @@ class VoiceSpeaker:
                 self._barge_in_timer = None
         self._playback.stop()
         try:
+            from app.services import vad_listener
+            threading.Timer(0.3, vad_listener.resume_auto_listen).start()
+        except Exception:
+            pass
+        try:
             self._barge_in_stopper()
         except Exception:
             pass
@@ -222,6 +227,17 @@ class VoiceSpeaker:
         # Non-blocking: PortAudio drives playback on its own thread.
         self._playback.play(samples, samplerate)
 
+        # Pause always-listening VAD during playback to prevent laptop speaker feedback
+        try:
+            from app.services import vad_listener
+            vad_listener.pause_auto_listen()
+            dur = (len(samples) / samplerate) if samplerate else 1.0
+            vad_timer = threading.Timer(dur + 0.6, vad_listener.resume_auto_listen)
+            vad_timer.daemon = True
+            vad_timer.start()
+        except Exception:
+            pass
+
         # Barge-in: only start if enabled via SPEAK2BUILD_BARGE_IN to prevent speaker feedback loop
         enable_barge_in = self._explicit_barge_in or os.environ.get("SPEAK2BUILD_BARGE_IN", "0").lower() in ("1", "true", "yes")
         if enable_barge_in:
@@ -229,6 +245,11 @@ class VoiceSpeaker:
                 with self._lock:
                     self._utterance_counter = 0
                 self._playback.stop()
+                try:
+                    from app.services import vad_listener
+                    threading.Timer(0.3, vad_listener.resume_auto_listen).start()
+                except Exception:
+                    pass
 
             try:
                 started = self._barge_in_starter(_on_barge_in)

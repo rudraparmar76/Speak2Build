@@ -193,6 +193,10 @@ export function usePipeline(options: PipelineOptions) {
     (promptText: string, source: "text" | "voice" = "text") => {
       const clean = promptText.trim();
       if (!clean) return;
+      if (isProcessing) {
+        console.warn("Pipeline already processing, ignoring duplicate start:", clean);
+        return;
+      }
 
       currentPromptRef.current = clean;
       setClarificationTurn(null);
@@ -245,7 +249,7 @@ export function usePipeline(options: PipelineOptions) {
         filePaths: candidatePaths,
       });
     },
-    [selectedFiles, scanResult, postMessage, pushHistory],
+    [selectedFiles, scanResult, postMessage, pushHistory, isProcessing],
   );
 
   /**

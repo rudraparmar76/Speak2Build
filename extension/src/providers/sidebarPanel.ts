@@ -96,6 +96,8 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
   private autoListenPollTimer?: NodeJS.Timeout;
   private autoListenActive = false;
   private lastAutoListenState = "disabled";
+  private isAutoListenPolling = false;
+  private lastProcessedAudioId = "";
 
   private async startAutoListen(client?: BackendClient): Promise<void> {
     const c = client || this.getClient();
@@ -114,6 +116,8 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
         this.stopAutoListenPolling();
         return;
       }
+      if (this.isAutoListenPolling) return;
+      this.isAutoListenPolling = true;
       try {
         const cl = this.getClient();
         const status = await cl.getAutoListenStatus();
@@ -121,7 +125,12 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           this.lastAutoListenState = status.state;
           this.post({ type: "autoListenState", enabled: status.enabled, state: status.state });
         }
-        if (status.state === "captured" && status.audio_id) {
+        if (
+          status.state === "captured" &&
+          status.audio_id &&
+          status.audio_id !== this.lastProcessedAudioId
+        ) {
+          this.lastProcessedAudioId = status.audio_id;
           const consumed = await cl.consumeAutoListen();
           const audioId = consumed.audio_id || status.audio_id;
           const duration = status.duration_seconds || 1.5;
@@ -136,6 +145,8 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
         }
       } catch {
         // ignore transient poll errors
+      } finally {
+        this.isAutoListenPolling = false;
       }
     }, 200);
   }

@@ -39,3 +39,4 @@ def test_auto_listen_pause_and_resume():
 
     res = client.post("/api/recording/auto-listen/resume")
     assert res.status_code == 200
+
