@@ -20,6 +20,7 @@ interface HeaderBarProps {
   onToggleSettings: () => void;
   onNewSession: () => void;
   onToggleHistory: () => void;
+  onStartTour?: () => void;
 }
 
 export function HeaderBar({
@@ -36,6 +37,7 @@ export function HeaderBar({
   onToggleSettings,
   onNewSession,
   onToggleHistory,
+  onStartTour,
 }: HeaderBarProps): ReactNode {
   return (
     <header className="header-bar">
@@ -92,6 +94,16 @@ export function HeaderBar({
         >
           {voiceOn ? "🔈" : "🔇"}
         </button>
+
+        {onStartTour && (
+          <button
+            className="header-bar__btn settings-gear-btn header-bar__btn--tour"
+            onClick={onStartTour}
+            title="Quick Tour & Feature Walkthrough (?)"
+          >
+            ?
+          </button>
+        )}
 
         <button
           className={`header-bar__btn settings-gear-btn${showSettings ? " active" : ""}`}

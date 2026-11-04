@@ -5,6 +5,7 @@ import type { FileDiff } from "../../types/messages";
 import { ChatBubble } from "./ChatBubble";
 import { QuickActions } from "./QuickActions";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { SessionStartHeader } from "./SessionStartHeader";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -25,6 +26,7 @@ interface ChatViewProps {
   generating: boolean;
   testFrameworkName: string;
   onSuggestionClick: (text: string) => void;
+  onStartTour?: () => void;
 }
 
 export function ChatView({
@@ -46,6 +48,7 @@ export function ChatView({
   generating,
   testFrameworkName,
   onSuggestionClick,
+  onStartTour,
 }: ChatViewProps): ReactNode {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +59,10 @@ export function ChatView({
   return (
     <div className="chat-view">
       {messages.length === 0 ? (
-        <WelcomeScreen onSuggestionClick={onSuggestionClick} />
+        <WelcomeScreen onSuggestionClick={onSuggestionClick} onStartTour={onStartTour} />
       ) : (
         <>
+          <SessionStartHeader startedAt={messages[0]?.timestamp} />
           {messages.map((message) => (
             <ChatBubble
               key={message.id}
@@ -108,4 +112,3 @@ export function ChatView({
     </div>
   );
 }
-

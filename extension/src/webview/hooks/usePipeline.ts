@@ -519,6 +519,27 @@ export function usePipeline(options: PipelineOptions) {
   );
 
   /**
+   * Auto-repair requested: Spawn a new assistant message representing the Auto-Repair turn.
+   * This ensures the new diffs appear chronologically after the test run that triggered it.
+   */
+  const startAutoRepairTurn = useCallback(() => {
+    setIsProcessing(true);
+    const repairMsgId = createMessageId();
+    currentTurnMsgIdRef.current = repairMsgId;
+    const repairMsg: ChatMessage = {
+      id: repairMsgId,
+      role: "assistant",
+      content: "Auto-repairing failing tests with AI…",
+      status: "thinking",
+      stages: [
+        { stage: "repairing", done: false },
+      ],
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, repairMsg]);
+  }, []);
+
+  /**
    * Step 4: Code Generation complete -> Present diffs and speak summary
    */
   const handleGenerationResult = useCallback(
@@ -537,12 +558,17 @@ export function usePipeline(options: PipelineOptions) {
         validationErrors: result.validationErrors,
         testErrors: result.testErrors,
         testsPassed: result.testsPassed,
-        stages: [
-          { stage: "reading_context", done: true },
-          { stage: "extracting_requirements", done: true },
-          { stage: "generating", done: true },
-          { stage: "done", done: true },
-        ],
+        stages: msg.stages?.some((s) => s.stage === "repairing")
+          ? [
+              { stage: "repairing", done: true },
+              { stage: "done", done: true },
+            ]
+          : [
+              { stage: "reading_context", done: true },
+              { stage: "extracting_requirements", done: true },
+              { stage: "generating", done: true },
+              { stage: "done", done: true },
+            ],
       }));
 
       if (result.summary) {
@@ -645,6 +671,7 @@ export function usePipeline(options: PipelineOptions) {
     handleTestResult,
     handlePipelineError,
     handleVoiceCommand,
+    startAutoRepairTurn,
   };
 }
 

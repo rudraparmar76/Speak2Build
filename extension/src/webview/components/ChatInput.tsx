@@ -45,13 +45,19 @@ export function ChatInput({
   const isRecording = isPushRecording || isAutoRecording;
   const isBusy = recorderState === "starting" || recorderState === "stopping";
 
-  // Auto-resize textarea height as content changes
+  // Auto-resize textarea height as content changes and focus on STT populate
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     const newHeight = Math.min(el.scrollHeight, 120);
     el.style.height = `${Math.max(newHeight, 36)}px`;
+
+    // If input was populated via speech-to-text, focus and place cursor at end for instant editing
+    if (value && document.activeElement !== el) {
+      el.focus();
+      el.setSelectionRange(value.length, value.length);
+    }
   }, [value]);
 
   const handleKeyDown = useCallback(

@@ -4,6 +4,7 @@ import { HeaderBar } from "./components/HeaderBar";
 import { ChatView } from "./components/ChatView";
 import { ChatInput } from "./components/ChatInput";
 import { SettingsSheet } from "./components/SettingsSheet";
+import { TourModal } from "./components/TourModal";
 import { usePipeline } from "./hooks/usePipeline";
 import { getVsCodeApi } from "./bridge";
 import {
@@ -36,6 +37,46 @@ export function App() {
   const [statusDetail, setStatusDetail] = useState("Contacting backend…");
   const [draft, setDraft] = useState("");
   const [, setHistory] = useState<HistoryEntry[]>([]);
+
+  // First-time walkthrough tour modal
+  const [showTour, setShowTour] = useState(() => {
+    try {
+      return !localStorage.getItem("speak2build_tour_completed");
+    } catch {
+      return false;
+    }
+  });
+
+  const handleCloseTour = useCallback(() => {
+    setShowTour(false);
+    try {
+      localStorage.setItem("speak2build_tour_completed", "true");
+    } catch {}
+  }, []);
+
+  const handleOpenTour = useCallback(() => {
+    setShowTour(true);
+  }, []);
+
+  // Timer for auto-sending voice transcription in Always-Listening mode (cleared if user edits)
+  const autoSendTimerRef = useRef<number | null>(null);
+
+  const clearAutoSendTimer = useCallback(() => {
+    if (autoSendTimerRef.current != null) {
+      window.clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+  }, []);
+
+  const handleDraftChange = useCallback(
+    (value: string) => {
+      clearAutoSendTimer();
+      setDraft(value);
+    },
+    [clearAutoSendTimer],
+  );
+
+  const startAutoRepairTurnRef = useRef<() => void>(() => {});
 
   const [recorderState, setRecorderState] = useState<
     "idle" | "starting" | "recording" | "stopping"
@@ -252,6 +293,9 @@ export function App() {
     pushHistory("Auto-repair started for failing tests…");
     speakText("Starting test auto repair.");
 
+    // Spawn a new assistant bubble for auto repair so it appears AFTER the test validation card
+    startAutoRepairTurnRef.current();
+
     const reqText = requirementRef.current
       ? JSON.stringify(requirementRef.current)
       : "Fix failing tests in workspace";
@@ -287,6 +331,7 @@ export function App() {
     handleTestResult,
     handlePipelineError,
     handleVoiceCommand,
+    startAutoRepairTurn,
   } = usePipeline({
     scanResult,
     selectedFiles,
@@ -309,14 +354,16 @@ export function App() {
 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  startAutoRepairTurnRef.current = startAutoRepairTurn;
 
   // Send typed message
   const handleSendMessage = useCallback(() => {
+    clearAutoSendTimer();
     const text = draft.trim();
     if (!text) return;
     setDraft("");
     startPipeline(text, "text");
-  }, [draft, startPipeline]);
+  }, [clearAutoSendTimer, draft, startPipeline]);
 
   // Click suggestion chip
   const handleSuggestionClick = useCallback(
@@ -397,6 +444,7 @@ export function App() {
 
           // If recognized as a voice command ("apply it", "run tests"), voiceCommandExecuted handles it
           if (message.isCommand) {
+            clearAutoSendTimer();
             break;
           }
 
@@ -409,6 +457,7 @@ export function App() {
           // the open questions — map it onto them instead of starting a new
           // pipeline from scratch.
           if (awaitingVoiceAnswerRef.current) {
+            clearAutoSendTimer();
             handleVoiceAnswerTranscript(trimmed);
             break;
           }
@@ -419,8 +468,19 @@ export function App() {
             break;
           }
 
-          // Otherwise, auto-run the hands-free pipeline with the transcribed request!
-          startPipeline(trimmed, "voice");
+          // Place the transcribed text into the editable input so the user can inspect/edit mistakes
+          clearAutoSendTimer();
+          setDraft(trimmed);
+          pushHistory(`🎙️ Transcribed voice: "${trimmed}"`);
+
+          if (autoListen) {
+            // In Always-Listening mode, provide a 2.5s edit window before auto-sending
+            autoSendTimerRef.current = window.setTimeout(() => {
+              autoSendTimerRef.current = null;
+              setDraft("");
+              startPipeline(trimmed, "voice");
+            }, 2500);
+          }
           break;
         }
         case "recordingCancelled": {
@@ -839,6 +899,7 @@ export function App() {
           setShowHistory((prev) => !prev);
           setShowSettings(false);
         }}
+        onStartTour={handleOpenTour}
       />
 
       {/* 2. Settings Modal */}
@@ -947,6 +1008,7 @@ export function App() {
         generating={isProcessing}
         testFrameworkName={testFramework.name}
         onSuggestionClick={handleSuggestionClick}
+        onStartTour={handleOpenTour}
       />
 
       {/* 5. Sticky Chat Input Bar */}
@@ -960,12 +1022,15 @@ export function App() {
         autoListenState={autoListenState}
         contextFiles={Array.from(selectedFiles)}
         recorderError={recorderError}
-        onChange={setDraft}
+        onChange={handleDraftChange}
         onSubmit={handleSendMessage}
         onToggleRecording={recorderState === "recording" ? stopRecording : startRecording}
         onCancelRecording={cancelRecording}
         onRemoveContextFile={handleRemoveContextFile}
       />
+
+      {/* 6. First-time walkthrough tour */}
+      <TourModal isOpen={showTour} onClose={handleCloseTour} />
     </main>
   );
 }

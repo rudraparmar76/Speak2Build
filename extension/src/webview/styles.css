@@ -1325,3 +1325,316 @@ body {
   color: #eab308 !important;
   border-color: rgba(234, 179, 8, 0.4) !important;
 }
+
+
+/* ---------- Session Start Header (Top of Chat) ---------- */
+
+.chat-session-start {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px 12px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chat-session-start__divider {
+  flex: 1;
+  height: 1px;
+  background: var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+  opacity: 0.6;
+}
+
+.chat-session-start__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  color: var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.7));
+  font-size: 11px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.chat-session-start__icon {
+  font-size: 12px;
+}
+
+.chat-session-start__text {
+  letter-spacing: 0.2px;
+}
+
+/* ---------- Welcome Screen Tour Banner ---------- */
+
+.welcome-screen__tour-banner {
+  margin: 4px 0;
+}
+
+.welcome-screen__tour-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--vscode-button-border, rgba(0, 122, 204, 0.4));
+  background: rgba(0, 122, 204, 0.1);
+  color: var(--vscode-textLink-foreground, #3794ff);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.welcome-screen__tour-btn:hover {
+  background: rgba(0, 122, 204, 0.2);
+  border-color: var(--vscode-textLink-foreground, #3794ff);
+  transform: translateY(-1px);
+}
+
+.welcome-screen__tour-icon {
+  font-size: 13px;
+}
+
+.welcome-screen__tour-arrow {
+  font-size: 12px;
+  opacity: 0.8;
+  transition: transform 0.15s ease;
+}
+
+.welcome-screen__tour-btn:hover .welcome-screen__tour-arrow {
+  transform: translateX(2px);
+}
+
+/* ---------- Header Tour Button ---------- */
+
+.header-bar__btn--tour {
+  font-weight: 700;
+  color: var(--vscode-textLink-foreground, #3794ff) !important;
+}
+
+/* ---------- Tour Modal & Walkthrough Overlay ---------- */
+
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: tourFadeIn 0.2s ease;
+}
+
+@keyframes tourFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tour-modal {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: tourSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes tourSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.tour-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--vscode-foreground);
+  opacity: 0.55;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.tour-modal__close:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.tour-modal__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.tour-modal__badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  background: rgba(0, 122, 204, 0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.tour-modal__icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--vscode-editor-background, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 2px 0;
+}
+
+.tour-modal__icon {
+  font-size: 22px;
+}
+
+.tour-modal__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.tour-modal__subtitle {
+  margin: 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.7));
+  line-height: 1.4;
+}
+
+.tour-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tour-modal__desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vscode-foreground);
+  opacity: 0.9;
+}
+
+.tour-modal__tips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--vscode-input-background, rgba(0, 0, 0, 0.15));
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.tour-modal__tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.8));
+}
+
+.tour-modal__tip-bullet {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tour-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  gap: 12px;
+}
+
+.tour-modal__dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tour-modal__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vscode-widget-border, rgba(128, 128, 128, 0.4));
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tour-modal__dot.active {
+  width: 18px;
+  border-radius: 4px;
+  background: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.tour-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tour-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tour-btn--secondary {
+  background: transparent;
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  color: var(--vscode-foreground);
+}
+
+.tour-btn--secondary:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.15));
+}
+
+.tour-btn--primary {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border: 1px solid transparent;
+}
+
+.tour-btn--primary:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
