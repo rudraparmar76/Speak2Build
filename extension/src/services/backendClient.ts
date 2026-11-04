@@ -128,7 +128,7 @@ export interface TestRunApiResponse {
 
 export interface CommandClassifyResponse {
   is_command: boolean;
-  action: "apply" | "revert" | "run_tests" | "repair" | "new_session" | "stop_listening" | "start_listening" | "cancel" | "none";
+  action: "apply" | "revert" | "reject" | "run_tests" | "repair" | "new_session" | "stop_listening" | "start_listening" | "cancel" | "none";
   confidence: number;
   feedback_speech: string;
 }

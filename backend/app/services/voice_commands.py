@@ -8,7 +8,7 @@ from typing import Optional
 @dataclass(frozen=True)
 class CommandMatch:
     is_command: bool
-    action: str  # "apply", "revert", "run_tests", "repair", "new_session", "stop_listening", "start_listening", "cancel", "none"
+    action: str  # "apply", "revert", "reject", "run_tests", "repair", "new_session", "stop_listening", "start_listening", "cancel", "none"
     confidence: float
     feedback_speech: str
 
@@ -17,6 +17,7 @@ class CommandMatch:
 FEEDBACK_MESSAGES = {
     "apply": "Applying diffs now.",
     "revert": "Reverting changes.",
+    "reject": "Rejecting proposed changes.",
     "run_tests": "Running workspace tests.",
     "repair": "Starting test auto-repair.",
     "new_session": "Starting a new session.",
@@ -89,6 +90,21 @@ def classify_voice_command(transcript: str) -> CommandMatch:
                 action="revert",
                 confidence=0.95,
                 feedback_speech=FEEDBACK_MESSAGES["revert"],
+            )
+
+    # 2b. REJECT DIFF COMMANDS
+    # Matches: "reject", "reject it", "reject all", "reject changes", "dismiss", "no reject", "don't apply"
+    reject_patterns = [
+        r"^(?:please\s+|can\s+you\s+|no\s+)?(?:reject|dismiss)(?:\s+(?:it|all|(?:the\s+)?diffs?|(?:the\s+)?changes?|(?:the\s+)?code|them))?(?:\s+please|\s+now)?$",
+        r"^(?:don't\s+apply(?:\s+it)?|do\s+not\s+apply(?:\s+it)?)$",
+    ]
+    for pat in reject_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="reject",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["reject"],
             )
 
     # 3. RUN TESTS COMMANDS

@@ -218,13 +218,25 @@ export function ChatBubble({
       {message.diffs && message.diffs.length > 0 && (
         <div className="chat-bubble__diffs">
           {pendingDiffs.length > 1 && (
-            <button
-              className="button chat-bubble__apply-all-btn"
-              onClick={() => onApplyAll(pendingDiffs)}
-              disabled={!online}
-            >
-              ✓ Accept All ({pendingDiffs.length})
-            </button>
+            <div className="chat-bubble__batch-actions">
+              <button
+                className="button chat-bubble__apply-all-btn"
+                onClick={() => onApplyAll(pendingDiffs)}
+                disabled={!online}
+              >
+                ✓ Accept All ({pendingDiffs.length})
+              </button>
+              <button
+                className="button secondary chat-bubble__reject-all-btn"
+                onClick={() => {
+                  for (const d of pendingDiffs) {
+                    onDismissDiff(d.unifiedDiff);
+                  }
+                }}
+              >
+                ✕ Reject All
+              </button>
+            </div>
           )}
           {message.diffs.map((diff) => {
             if (dismissedDiffs.has(diff.unifiedDiff)) return null;

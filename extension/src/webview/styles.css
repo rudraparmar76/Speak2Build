@@ -341,8 +341,13 @@ body {
   margin-top: 6px;
 }
 
+.chat-bubble__batch-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .chat-bubble__apply-all-btn {
-  align-self: flex-start;
   background: #238636;
   color: #fff;
   font-weight: 600;
@@ -355,6 +360,12 @@ body {
 
 .chat-bubble__apply-all-btn:hover:not(:disabled) {
   background: #2ea043;
+}
+
+.chat-bubble__reject-all-btn {
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .chat-bubble__validation-errors {
@@ -619,19 +630,34 @@ body {
 
 .diff-card {
   margin: 6px 0;
-  padding: 10px;
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.diff-card:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+.diff-card--applied {
+  border-color: rgba(35, 134, 54, 0.4);
 }
 
 .diff-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid var(--vscode-panel-border);
   font-size: 12px;
+}
+
+.diff-file-icon {
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .diff-path {
@@ -642,6 +668,28 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
+}
+
+.diff-path__dir {
+  opacity: 0.55;
+  font-weight: 400;
+}
+
+.diff-stats {
+  display: flex;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--vscode-editor-font-family, monospace);
+  flex-shrink: 0;
+}
+
+.diff-stats__add {
+  color: var(--vscode-charts-green, #4ade80);
+}
+
+.diff-stats__del {
+  color: var(--vscode-charts-red, #f87171);
 }
 
 .badge.new-file {
@@ -663,26 +711,201 @@ body {
   text-transform: uppercase;
 }
 
-.diff-content {
-  margin: 0;
-  padding: 8px;
-  background: var(--vscode-textCodeBlock-background);
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1.4;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  border: 1px solid var(--vscode-panel-border);
-  max-height: 220px;
+/* Diff body (table) */
+.diff-body {
+  max-height: 280px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
+.diff-body::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.diff-body::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 3px;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  table-layout: fixed;
+}
+
+/* Line rows */
+.diff-line {
+  transition: background 0.1s;
+}
+
+.diff-line--add {
+  background: rgba(46, 160, 67, 0.15);
+}
+
+.diff-line--delete {
+  background: rgba(248, 81, 73, 0.15);
+}
+
+.diff-line--context {
+  background: transparent;
+}
+
+.diff-line--hunk {
+  background: rgba(56, 139, 253, 0.1);
+}
+
+.diff-line--header {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Gutter (line numbers) */
+.diff-gutter {
+  width: 38px;
+  min-width: 38px;
+  max-width: 38px;
+  padding: 0 6px;
+  text-align: right;
+  color: var(--vscode-editorLineNumber-foreground, rgba(255, 255, 255, 0.3));
+  font-size: 10px;
+  user-select: none;
+  vertical-align: top;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-line--add .diff-gutter--old,
+.diff-line--delete .diff-gutter--new {
+  opacity: 0;
+}
+
+/* Prefix column (+/-/space) */
+.diff-line__prefix {
+  width: 14px;
+  min-width: 14px;
+  max-width: 14px;
+  padding: 0 2px;
+  text-align: center;
+  user-select: none;
+  font-weight: 700;
+  vertical-align: top;
+}
+
+.diff-line--add .diff-line__prefix {
+  color: var(--vscode-charts-green, #4ade80);
+}
+
+.diff-line--delete .diff-line__prefix {
+  color: var(--vscode-charts-red, #f87171);
+}
+
+/* Content column */
+.diff-line__content {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.diff-line--hunk .diff-line__content,
+.diff-line--header .diff-line__content {
+  color: var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.5));
+  font-style: italic;
+  padding: 2px 8px;
+}
+
+/* Collapse toggle */
+.diff-collapse-toggle {
+  display: block;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--vscode-textLink-foreground, #3794ff);
+  font-size: 10px;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+}
+
+.diff-collapse-toggle:hover {
+  background: rgba(0, 0, 0, 0.15);
+  text-decoration: underline;
+}
+
+/* Action buttons */
 .diff-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.diff-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.diff-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.diff-action-icon {
+  font-size: 11px;
+}
+
+.diff-action-btn--view {
+  background: transparent;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  border-color: var(--vscode-panel-border);
+}
+
+.diff-action-btn--view:hover:not(:disabled) {
+  background: rgba(55, 148, 255, 0.1);
+  border-color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.diff-action-btn--apply {
+  background: #238636;
+  color: #fff;
+  font-weight: 600;
+}
+
+.diff-action-btn--apply:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.diff-action-btn--reject {
+  background: transparent;
+  color: var(--vscode-charts-red, #f87171);
+  border-color: var(--vscode-panel-border);
+}
+
+.diff-action-btn--reject:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: var(--vscode-charts-red, #f87171);
+}
+
+.diff-action-btn--revert {
+  background: #a82020;
+  color: #fff;
+}
+
+.diff-action-btn--revert:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .hint {

@@ -23,6 +23,16 @@ def test_classify_revert_commands():
     assert classify_voice_command("rollback").action == "revert"
     assert classify_voice_command("discard").action == "revert"
 
+def test_classify_reject_commands():
+    assert classify_voice_command("reject").action == "reject"
+    assert classify_voice_command("reject it").action == "reject"
+    assert classify_voice_command("reject all").action == "reject"
+    assert classify_voice_command("reject changes").action == "reject"
+    assert classify_voice_command("dismiss").action == "reject"
+    assert classify_voice_command("no reject").action == "reject"
+    assert classify_voice_command("don't apply").action == "reject"
+    assert classify_voice_command("do not apply it").action == "reject"
+
 
 def test_classify_run_tests_commands():
     assert classify_voice_command("run tests").action == "run_tests"

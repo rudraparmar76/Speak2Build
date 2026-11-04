@@ -294,6 +294,7 @@ export function App() {
     pushHistory,
     applyDiff,
     revertDiff,
+    dismissDiff,
     runWorkspaceTests,
     triggerAutoRepair,
     createNewSession,
