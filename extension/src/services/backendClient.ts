@@ -128,7 +128,7 @@ export interface TestRunApiResponse {
 
 export interface CommandClassifyResponse {
   is_command: boolean;
-  action: "apply" | "revert" | "run_tests" | "repair" | "new_session" | "none";
+  action: "apply" | "revert" | "run_tests" | "repair" | "new_session" | "stop_listening" | "start_listening" | "cancel" | "none";
   confidence: number;
   feedback_speech: string;
 }
@@ -157,6 +157,17 @@ export interface BargeInStatusResponse {
   state: string;
   auto_audio_id?: string | null;
   duration_seconds?: number;
+}
+
+export interface AutoListenStatusResponse {
+  enabled: boolean;
+  state: "disabled" | "listening" | "recording" | "captured" | "paused";
+  audio_id?: string | null;
+  duration_seconds: number;
+}
+
+export interface AutoListenConsumeResponse {
+  audio_id?: string | null;
 }
 
 export interface StopSpeakResponse {
@@ -520,6 +531,67 @@ export class BackendClient {
   }
 
   /** Map one spoken-reply transcript onto pending clarification questions. */
+  /** Enable or disable always-listening Silero VAD monitoring. */
+  async setAutoListen(enabled: boolean): Promise<AutoListenStatusResponse> {
+    return await this.request<AutoListenStatusResponse>(
+      "PUT",
+      "/api/recording/auto-listen",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      },
+      REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /** Get status of always-listening Silero VAD. */
+  async getAutoListenStatus(): Promise<AutoListenStatusResponse> {
+    return await this.request<AutoListenStatusResponse>(
+      "GET",
+      "/api/recording/auto-listen/status",
+      undefined,
+      1000,
+    );
+  }
+
+  /** Pop captured audio id and return listener to listening state. */
+  async consumeAutoListen(): Promise<AutoListenConsumeResponse> {
+    return await this.request<AutoListenConsumeResponse>(
+      "POST",
+      "/api/recording/auto-listen/consume",
+      { method: "POST" },
+      REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /** Temporarily pause always-listening. */
+  async pauseAutoListen(): Promise<void> {
+    try {
+      await this.request(
+        "POST",
+        "/api/recording/auto-listen/pause",
+        { method: "POST" },
+        REQUEST_TIMEOUT_MS,
+      );
+    } catch {
+      // best-effort
+    }
+  }
+
+  /** Resume always-listening. */
+  async resumeAutoListen(): Promise<void> {
+    try {
+      await this.request(
+        "POST",
+        "/api/recording/auto-listen/resume",
+        { method: "POST" },
+        REQUEST_TIMEOUT_MS,
+      );
+    } catch {
+      // best-effort
+    }
+  }
   async mapAnswers(questions: string[], transcript: string): Promise<MappedAnswersResponse> {
     return await this.request<MappedAnswersResponse>(
       "POST",

@@ -42,6 +42,16 @@ export function App() {
   >("idle");
   const [recorderError, setRecorderError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [autoListen, setAutoListen] = useState(false);
+  const [autoListenState, setAutoListenState] = useState<string>("disabled");
+
+  const handleToggleAutoListen = useCallback(() => {
+    if (autoListen) {
+      vscode.postMessage({ type: "disableAutoListen" });
+    } else {
+      vscode.postMessage({ type: "enableAutoListen" });
+    }
+  }, [autoListen]);
   const [lastUpload, setLastUpload] = useState<UploadInfo | null>(null);
   const [transcript, setTranscript] = useState<TranscriptInfo | null>(null);
 
@@ -554,6 +564,11 @@ export function App() {
           }, 1200);
           break;
         }
+        case "autoListenState": {
+          setAutoListen(message.enabled);
+          setAutoListenState(message.state);
+          break;
+        }
         case "llmTestResult": {
           setTestingConnection(false);
           setTestResult({
@@ -589,6 +604,7 @@ export function App() {
     vscode.postMessage({ type: "loadSessionState" });
     vscode.postMessage({ type: "detectTestFramework" });
     vscode.postMessage({ type: "scanContext", workspaceRoot: "${workspaceFolder}" });
+    vscode.postMessage({ type: "getAutoListenStatus" });
   }, []);
 
   // Restore snapshot from host
@@ -731,6 +747,8 @@ export function App() {
       <HeaderBar
         voiceOn={voiceOn}
         speaking={speaking}
+        autoListen={autoListen}
+        onToggleAutoListen={handleToggleAutoListen}
         showSettings={showSettings}
         sessionCount={sessionList.length}
         onToggleVoice={() => {
@@ -865,6 +883,8 @@ export function App() {
         elapsedMs={elapsedMs}
         disabled={!online || isProcessing}
         speaking={speaking}
+        autoListen={autoListen}
+        autoListenState={autoListenState}
         contextFiles={Array.from(selectedFiles)}
         recorderError={recorderError}
         onChange={setDraft}

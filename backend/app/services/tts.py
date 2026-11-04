@@ -166,6 +166,7 @@ class VoiceSpeaker:
         self._synthesize = synthesizer or _hybrid_synthesize
         self._decode = decode or _default_decode
         self._playback = playback or PlaybackController()
+        self._explicit_barge_in = barge_in_starter is not None
         self._barge_in_starter = barge_in_starter if barge_in_starter is not None else recorder.start_barge_in
         self._barge_in_stopper = barge_in_stopper if barge_in_stopper is not None else recorder.stop_barge_in
         self._lock = threading.Lock()
@@ -222,7 +223,7 @@ class VoiceSpeaker:
         self._playback.play(samples, samplerate)
 
         # Barge-in: only start if enabled via SPEAK2BUILD_BARGE_IN to prevent speaker feedback loop
-        enable_barge_in = os.environ.get("SPEAK2BUILD_BARGE_IN", "0").lower() in ("1", "true", "yes")
+        enable_barge_in = self._explicit_barge_in or os.environ.get("SPEAK2BUILD_BARGE_IN", "0").lower() in ("1", "true", "yes")
         if enable_barge_in:
             def _on_barge_in() -> None:
                 with self._lock:

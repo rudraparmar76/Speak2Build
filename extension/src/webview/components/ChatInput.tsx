@@ -12,6 +12,8 @@ interface ChatInputProps {
   elapsedMs: number;
   disabled: boolean;
   speaking: boolean;
+  autoListen?: boolean;
+  autoListenState?: string;
   contextFiles: string[];
   recorderError: string | null;
   onChange: (value: string) => void;
@@ -27,6 +29,8 @@ export function ChatInput({
   elapsedMs,
   disabled,
   speaking,
+  autoListen = false,
+  autoListenState = "disabled",
   contextFiles,
   recorderError,
   onChange,
@@ -36,7 +40,9 @@ export function ChatInput({
   onRemoveContextFile,
 }: ChatInputProps): ReactNode {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isRecording = recorderState === "recording";
+  const isPushRecording = recorderState === "recording";
+  const isAutoRecording = autoListen && autoListenState === "recording";
+  const isRecording = isPushRecording || isAutoRecording;
   const isBusy = recorderState === "starting" || recorderState === "stopping";
 
   // Auto-resize textarea height as content changes
@@ -59,6 +65,20 @@ export function ChatInput({
     },
     [value, disabled, onSubmit],
   );
+
+  const getPlaceholder = () => {
+    if (speaking) {
+      return autoListen
+        ? "AI speaking… (barge in with voice anytime or type)"
+        : "AI speaking… press mic to barge in or type here";
+    }
+    if (autoListen) {
+      return autoListenState === "listening"
+        ? "Always listening 🎧… just speak or type here"
+        : "Ask Speak2Build or type here…";
+    }
+    return "Ask Speak2Build or press mic…";
+  };
 
   return (
     <div className="chat-input-bar">
@@ -85,15 +105,31 @@ export function ChatInput({
         </div>
       )}
 
+      {/* Hands-free listening banner when in listening mode */}
+      {autoListen && !isRecording && (
+        <div className="chat-input-vad-banner">
+          <span className="chat-input-vad-dot" />
+          <span className="chat-input-vad-text">
+            {autoListenState === "paused"
+              ? "Paused while assistant speaks"
+              : "Listening for your voice (Silero VAD active)"}
+          </span>
+        </div>
+      )}
+
       <div className="chat-input-row">
         {isRecording ? (
           <div className="chat-input-recording">
             <span className="chat-input-recording__dot" />
-            <span className="chat-input-recording__time">
-              {(elapsedMs / 1000).toFixed(1)}s
-            </span>
+            {isPushRecording && (
+              <span className="chat-input-recording__time">
+                {(elapsedMs / 1000).toFixed(1)}s
+              </span>
+            )}
             <span className="chat-input-recording__label">
-              Listening to your voice…
+              {isAutoRecording
+                ? "Hearing you speak… (pause 1.2s when done)"
+                : "Listening to your voice…"}
             </span>
             <button
               type="button"
@@ -110,11 +146,7 @@ export function ChatInput({
             rows={1}
             value={value}
             disabled={disabled}
-            placeholder={
-              speaking
-                ? "AI speaking… press mic to barge in or type here"
-                : "Ask Speak2Build or press mic…"
-            }
+            placeholder={getPlaceholder()}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
           />
@@ -123,12 +155,18 @@ export function ChatInput({
         {/* Mic button */}
         <button
           type="button"
-          className={`chat-input-btn chat-input-btn--mic${isRecording ? " recording" : ""}`}
+          className={`chat-input-btn chat-input-btn--mic${isRecording ? " recording" : ""}${autoListen ? " autolisten" : ""}`}
           onClick={onToggleRecording}
           disabled={disabled || isBusy}
-          title={isRecording ? "Stop recording (Enter)" : "Start voice recording"}
+          title={
+            isRecording
+              ? "Stop recording (Enter)"
+              : autoListen
+                ? "Always-Listening active (🎧) — click to manually push-to-talk"
+                : "Start voice recording (🎤)"
+          }
         >
-          {isRecording ? "■" : "🎤"}
+          {isRecording ? "■" : autoListen ? "🎧" : "🎤"}
         </button>
 
         {/* Send button */}
@@ -147,9 +185,8 @@ export function ChatInput({
 
       <div className="chat-input-footer">
         <span>Enter to send · Shift+Enter for newline</span>
-        <span>Speak or type</span>
+        <span>{autoListen ? "Hands-free voice active" : "Speak or type"}</span>
       </div>
     </div>
   );
 }
-

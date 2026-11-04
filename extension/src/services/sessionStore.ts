@@ -36,6 +36,7 @@ export function emptySnapshot(): SessionSnapshot {
     dismissedDiffs: [],
     testRunResult: null,
     history: [],
+    messages: [],
   };
 }
 

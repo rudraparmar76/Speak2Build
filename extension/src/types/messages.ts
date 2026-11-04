@@ -83,7 +83,11 @@ export type WebviewToHost =
   /** Voice-answers flow: transcribe a dedicated answer recording. */
   | { type: "transcribeAnswer"; audioId: string }
   /** Voice-answers flow: map the transcript onto pending questions. */
-  | { type: "mapAnswers"; questions: string[]; transcript: string };
+  | { type: "mapAnswers"; questions: string[]; transcript: string }
+  /** Always-listening Silero VAD controls */
+  | { type: "enableAutoListen" }
+  | { type: "disableAutoListen" }
+  | { type: "getAutoListenStatus" };
 
 /**
  * Pipeline stages for live progress reporting (streaming). The webview shows
@@ -289,6 +293,7 @@ export type HostToWebview =
   | { type: "testRunResult"; result: TestRunResult }
   | { type: "voiceCommandExecuted"; action: string; feedbackSpeech: string }
   | { type: "bargeInTriggered" }
+  | { type: "autoListenState"; enabled: boolean; state: string }
 
   | { type: "testFrameworkDetected"; framework: string; name: string }
   | { type: "llmConfigResult"; config: LlmConfigData }

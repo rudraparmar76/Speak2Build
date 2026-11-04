@@ -8,7 +8,7 @@ from typing import Optional
 @dataclass(frozen=True)
 class CommandMatch:
     is_command: bool
-    action: str  # "apply", "revert", "run_tests", "repair", "new_session", "none"
+    action: str  # "apply", "revert", "run_tests", "repair", "new_session", "stop_listening", "start_listening", "cancel", "none"
     confidence: float
     feedback_speech: str
 
@@ -20,6 +20,9 @@ FEEDBACK_MESSAGES = {
     "run_tests": "Running workspace tests.",
     "repair": "Starting test auto-repair.",
     "new_session": "Starting a new session.",
+    "stop_listening": "Stopping hands-free listening.",
+    "start_listening": "Hands-free listening is on.",
+    "cancel": "Cancelled.",
 }
 
 # Verbs / nouns that strongly indicate a coding task rather than a meta-command
@@ -133,6 +136,48 @@ def classify_voice_command(transcript: str) -> CommandMatch:
                 action="new_session",
                 confidence=0.95,
                 feedback_speech=FEEDBACK_MESSAGES["new_session"],
+            )
+
+    # 6. STOP LISTENING COMMANDS
+    # Matches: "stop listening", "pause listening", "stop hands free", "pause hands free", "disable hands free"
+    stop_patterns = [
+        r"^(?:please\s+|can\s+you\s+)?(?:stop\s+listening|pause\s+listening|stop\s+recording|pause\s+hands[- ]?free|disable\s+hands[- ]?free)$",
+    ]
+    for pat in stop_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="stop_listening",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["stop_listening"],
+            )
+
+    # 7. START LISTENING COMMANDS
+    # Matches: "start listening", "go hands free", "enable hands free", "hands free mode"
+    start_patterns = [
+        r"^(?:please\s+|can\s+you\s+)?(?:start\s+listening|go\s+hands[- ]?free|enable\s+hands[- ]?free|listen\s+to\s+me|hands[- ]?free\s+mode)$",
+    ]
+    for pat in start_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="start_listening",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["start_listening"],
+            )
+
+    # 8. CANCEL COMMANDS
+    # Matches: "cancel", "cancel that", "never mind", "abort"
+    cancel_patterns = [
+        r"^(?:please\s+)?(?:cancel(?:\s+that)?|never\s+mind|abort)$",
+    ]
+    for pat in cancel_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="cancel",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["cancel"],
             )
 
     return CommandMatch(is_command=False, action="none", confidence=0.0, feedback_speech="")

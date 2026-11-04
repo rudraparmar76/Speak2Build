@@ -2,16 +2,18 @@ import type { ReactNode } from "react";
 
 /**
  * Compact header bar for the chat panel. Shows the title, voice/settings/
- * session controls, and a speaking indicator. Pure rendering; App owns all
- * toggle state and dispatches actions via callbacks.
+ * session controls, speaking indicator, and Always-Listening mode toggle.
+ * Pure rendering; App owns all toggle state and dispatches actions via callbacks.
  */
 
 interface HeaderBarProps {
   voiceOn: boolean;
   speaking: boolean;
+  autoListen?: boolean;
   showSettings: boolean;
   sessionCount: number;
   onToggleVoice: () => void;
+  onToggleAutoListen?: () => void;
   onStopSpeaking: () => void;
   onToggleSettings: () => void;
   onNewSession: () => void;
@@ -21,9 +23,11 @@ interface HeaderBarProps {
 export function HeaderBar({
   voiceOn,
   speaking,
+  autoListen = false,
   showSettings,
   sessionCount,
   onToggleVoice,
+  onToggleAutoListen,
   onStopSpeaking,
   onToggleSettings,
   onNewSession,
@@ -31,7 +35,15 @@ export function HeaderBar({
 }: HeaderBarProps): ReactNode {
   return (
     <header className="header-bar">
-      <span className="header-bar__title">Speak2Build</span>
+      <div className="header-bar__brand">
+        <span className="header-bar__title">Speak2Build</span>
+        {autoListen && (
+          <span className="header-bar__listening-pill" title="Always-listening hands-free mode active">
+            <span className="header-bar__listening-dot" />
+            Hands-Free
+          </span>
+        )}
+      </div>
 
       <div className="header-bar__actions">
         {speaking && (
@@ -44,6 +56,18 @@ export function HeaderBar({
             Speaking…
           </button>
         )}
+
+        <button
+          className={`header-bar__btn settings-gear-btn${autoListen ? " active header-bar__btn--listening" : ""}`}
+          onClick={onToggleAutoListen}
+          title={
+            autoListen
+              ? "Always-Listening active (🎧) — Silero VAD monitors voice. Click to switch to Push-to-Talk"
+              : "Push-to-Talk mode (🎤) — Click to enable Always-Listening"
+          }
+        >
+          {autoListen ? "🎧" : "🎤"}
+        </button>
 
         <button
           className="header-bar__btn settings-gear-btn"

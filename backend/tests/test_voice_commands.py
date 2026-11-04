@@ -79,3 +79,12 @@ def test_api_classify_command_not_a_command():
     data = res.json()
     assert data["is_command"] is False
     assert data["action"] == "none"
+
+
+def test_classify_listening_mode_commands():
+    assert classify_voice_command("stop listening").action == "stop_listening"
+    assert classify_voice_command("pause listening").action == "stop_listening"
+    assert classify_voice_command("start listening").action == "start_listening"
+    assert classify_voice_command("go hands free").action == "start_listening"
+    assert classify_voice_command("cancel").action == "cancel"
+    assert classify_voice_command("never mind").action == "cancel"

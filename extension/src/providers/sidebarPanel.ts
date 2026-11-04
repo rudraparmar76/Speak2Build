@@ -93,9 +93,79 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private autoListenPollTimer?: NodeJS.Timeout;
+  private autoListenActive = false;
+  private lastAutoListenState = "disabled";
+
+  private async startAutoListen(client?: BackendClient): Promise<void> {
+    const c = client || this.getClient();
+    this.stopAutoListenPolling();
+    this.autoListenActive = true;
+    try {
+      const res = await c.setAutoListen(true);
+      this.lastAutoListenState = res.state;
+      this.post({ type: "autoListenState", enabled: true, state: res.state });
+    } catch {
+      // best-effort
+    }
+
+    this.autoListenPollTimer = setInterval(async () => {
+      if (!this.autoListenActive) {
+        this.stopAutoListenPolling();
+        return;
+      }
+      try {
+        const cl = this.getClient();
+        const status = await cl.getAutoListenStatus();
+        if (status.state !== this.lastAutoListenState) {
+          this.lastAutoListenState = status.state;
+          this.post({ type: "autoListenState", enabled: status.enabled, state: status.state });
+        }
+        if (status.state === "captured" && status.audio_id) {
+          const consumed = await cl.consumeAutoListen();
+          const audioId = consumed.audio_id || status.audio_id;
+          const duration = status.duration_seconds || 1.5;
+          this.post({
+            type: "audioUploaded",
+            audioId,
+            durationSeconds: duration,
+            sampleRate: 16000,
+            channels: 1,
+            sizeBytes: 0,
+          });
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 200);
+  }
+
+  private async stopAutoListen(client?: BackendClient): Promise<void> {
+    this.autoListenActive = false;
+    this.stopAutoListenPolling();
+    try {
+      const c = client || this.getClient();
+      await c.setAutoListen(false);
+    } catch {
+      // best-effort
+    }
+    this.lastAutoListenState = "disabled";
+    this.post({ type: "autoListenState", enabled: false, state: "disabled" });
+  }
+
+  private stopAutoListenPolling(): void {
+    if (this.autoListenPollTimer) {
+      clearInterval(this.autoListenPollTimer);
+      this.autoListenPollTimer = undefined;
+    }
+  }
+
   private async speakUtterance(text: string, voice?: string): Promise<void> {
     try {
       const client = this.getClient();
+      if (this.autoListenActive) {
+        await client.pauseAutoListen();
+      }
       const result = await client.speak(text, voice);
       this.post({
         type: "speakingStarted",
@@ -105,8 +175,16 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
       });
       const pollDuration = Math.max((result.duration_seconds + 1.0) * 1000, 3000);
       this.startBargeInPolling(pollDuration);
+      setTimeout(async () => {
+        if (this.autoListenActive) {
+          await client.resumeAutoListen();
+        }
+      }, pollDuration);
     } catch {
-      // best-effort
+      if (this.autoListenActive) {
+        const client = this.getClient();
+        await client.resumeAutoListen();
+      }
     }
   }
 
@@ -203,6 +281,11 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
               const command = await client.classifyCommand(trimmed);
               if (command.is_command && command.action !== "none") {
                 isCommand = true;
+                if (command.action === "stop_listening") {
+                  await this.stopAutoListen(client);
+                } else if (command.action === "start_listening") {
+                  await this.startAutoListen(client);
+                }
                 this.post({
                   type: "voiceCommandExecuted",
                   action: command.action,
@@ -688,12 +771,28 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
         case "stopSpeaking": {
           this.stopBargeInPolling();
           await client.stopSpeaking();
+          if (this.autoListenActive) {
+            await client.resumeAutoListen();
+          }
           this.post({ type: "speakingStopped" });
           break;
         }
         case "transcribeAnswer": {
           const result = await client.transcribe(message.audioId);
           this.post({ type: "answerTranscript", text: result.text });
+          break;
+        }
+        case "enableAutoListen": {
+          await this.startAutoListen(client);
+          break;
+        }
+        case "disableAutoListen": {
+          await this.stopAutoListen(client);
+          break;
+        }
+        case "getAutoListenStatus": {
+          const status = await client.getAutoListenStatus();
+          this.post({ type: "autoListenState", enabled: status.enabled, state: status.state });
           break;
         }
         case "mapAnswers": {

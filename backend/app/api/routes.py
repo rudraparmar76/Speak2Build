@@ -59,8 +59,14 @@ from app.schemas.voice_answers import (
     MappedAnswerItem,
 )
 from app.schemas.tts import SpeakRequest, SpeakResponse, StopSpeakResponse
+from app.schemas.auto_listen import (
+    AutoListenRequest,
+    AutoListenStatusResponse,
+    AutoListenConsumeResponse,
+)
 from app.services import audio_store
 from app.services import recorder as audio_recorder
+from app.services import vad_listener
 from app.services import requirements as requirements_service
 from app.services import transcription as transcription_service
 from app.services import project_context as context_service
@@ -282,6 +288,43 @@ def get_barge_in_status() -> BargeInStatusResponse:
         auto_audio_id=auto_res.audio_id if auto_res else None,
         duration_seconds=auto_res.duration_seconds if auto_res else 0.0,
     )
+
+
+@router.put("/api/recording/auto-listen", response_model=AutoListenStatusResponse)
+def set_auto_listen(payload: AutoListenRequest) -> AutoListenStatusResponse:
+    """Enable or disable always-listening Silero VAD monitoring."""
+    if payload.enabled:
+        vad_listener.enable_auto_listen()
+    else:
+        vad_listener.disable_auto_listen()
+    st = vad_listener.auto_listen_status()
+    return AutoListenStatusResponse(**st)
+
+
+@router.get("/api/recording/auto-listen/status", response_model=AutoListenStatusResponse)
+def get_auto_listen_status() -> AutoListenStatusResponse:
+    """Check current state of always-listening VAD monitoring."""
+    st = vad_listener.auto_listen_status()
+    return AutoListenStatusResponse(**st)
+
+
+@router.post("/api/recording/auto-listen/consume", response_model=AutoListenConsumeResponse)
+def consume_auto_listen() -> AutoListenConsumeResponse:
+    """Pop captured audio id from auto-listen and return to listening mode."""
+    aid = vad_listener.consume_auto_listen_capture()
+    return AutoListenConsumeResponse(audio_id=aid)
+
+
+@router.post("/api/recording/auto-listen/pause")
+def pause_auto_listen():
+    """Temporarily pause auto-listen while system TTS is playing or busy."""
+    return vad_listener.pause_auto_listen()
+
+
+@router.post("/api/recording/auto-listen/resume")
+def resume_auto_listen():
+    """Resume auto-listen after pause."""
+    return vad_listener.resume_auto_listen()
 
 @router.post("/api/transcribe", response_model=TranscriptionResponse)
 def transcribe(payload: TranscribeRequest) -> TranscriptionResponse:
