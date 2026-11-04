@@ -128,7 +128,7 @@ export interface TestRunApiResponse {
 
 export interface CommandClassifyResponse {
   is_command: boolean;
-  action: "apply" | "revert" | "reject" | "run_tests" | "repair" | "new_session" | "stop_listening" | "start_listening" | "cancel" | "none";
+  action: "apply" | "revert" | "reject" | "run_tests" | "repair" | "new_session" | "stop_listening" | "start_listening" | "auto_apply_on" | "auto_apply_off" | "cancel" | "none";
   confidence: number;
   feedback_speech: string;
 }
@@ -324,6 +324,7 @@ export class BackendClient {
     transcript: string,
     answers?: Record<string, string>,
     contextSnippets?: Snippet[],
+    conversationHistory?: Array<{ role: string; content: string }>,
   ): Promise<RequirementsApiResponse> {
     const body: Record<string, unknown> = { transcript };
     if (answers && Object.keys(answers).length > 0) {
@@ -331,6 +332,9 @@ export class BackendClient {
     }
     if (contextSnippets && contextSnippets.length > 0) {
       body.context_snippets = contextSnippets;
+    }
+    if (conversationHistory && conversationHistory.length > 0) {
+      body.conversation_history = conversationHistory;
     }
     return await this.request<RequirementsApiResponse>(
       "POST",
@@ -383,18 +387,25 @@ export class BackendClient {
     contextSnippets: Snippet[],
     options?: GenerationOptions,
     workspaceRoot?: string,
+    conversationHistory?: Array<{ role: string; content: string }>,
   ): Promise<GenerationApiResponse> {
+    const body: Record<string, unknown> = {
+      requirement_text: requirementText,
+      context_snippets: contextSnippets,
+      options: options || {},
+    };
+    if (workspaceRoot) {
+      body.workspace_root = workspaceRoot;
+    }
+    if (conversationHistory && conversationHistory.length > 0) {
+      body.conversation_history = conversationHistory;
+    }
     return await this.request<GenerationApiResponse>(
       "POST",
       "/api/generate",
       {
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requirement_text: requirementText,
-          context_snippets: contextSnippets,
-          options: options || {},
-          workspace_root: workspaceRoot,
-        }),
+        body: JSON.stringify(body),
       },
       GENERATION_TIMEOUT_MS,
     );

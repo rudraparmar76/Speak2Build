@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import type { ChatMessage } from "../types/chat";
 import type { FileDiff } from "../../types/messages";
 import { ChatBubble } from "./ChatBubble";
+import { QuickActions } from "./QuickActions";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 interface ChatViewProps {
@@ -57,28 +58,51 @@ export function ChatView({
       {messages.length === 0 ? (
         <WelcomeScreen onSuggestionClick={onSuggestionClick} />
       ) : (
-        messages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            appliedDiffs={appliedDiffs}
-            dismissedDiffs={dismissedDiffs}
-            applyingDiff={applyingDiff}
-            revertingDiff={revertingDiff}
-            applyError={applyError}
-            online={online}
-            onApplyDiff={onApplyDiff}
-            onRevertDiff={onRevertDiff}
-            onViewDiff={onViewDiff}
-            onDismissDiff={onDismissDiff}
-            onApplyAll={onApplyAll}
-            onRunTests={onRunTests}
-            onAutoRepair={onAutoRepair}
-            runningTests={runningTests}
-            generating={generating}
-            testFrameworkName={testFrameworkName}
-          />
-        ))
+        <>
+          {messages.map((message) => (
+            <ChatBubble
+              key={message.id}
+              message={message}
+              appliedDiffs={appliedDiffs}
+              dismissedDiffs={dismissedDiffs}
+              applyingDiff={applyingDiff}
+              revertingDiff={revertingDiff}
+              applyError={applyError}
+              online={online}
+              onApplyDiff={onApplyDiff}
+              onRevertDiff={onRevertDiff}
+              onViewDiff={onViewDiff}
+              onDismissDiff={onDismissDiff}
+              onApplyAll={onApplyAll}
+              onRunTests={onRunTests}
+              onAutoRepair={onAutoRepair}
+              runningTests={runningTests}
+              generating={generating}
+              testFrameworkName={testFrameworkName}
+            />
+          ))}
+          {!generating && (() => {
+            const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+            const pendingDiffs = (lastAssistant?.diffs ?? []).filter(
+              (d) => !appliedDiffs.has(d.unifiedDiff) && !dismissedDiffs.has(d.unifiedDiff),
+            );
+            const hasFailedTests =
+              lastAssistant?.testRunResult?.success === false ||
+              (lastAssistant?.testErrors?.length ?? 0) > 0;
+            return (
+              <QuickActions
+                hasPendingDiffs={pendingDiffs.length > 0}
+                hasFailedTests={hasFailedTests}
+                runningTests={runningTests}
+                online={online}
+                onApplyAll={() => onApplyAll(pendingDiffs)}
+                onRunTests={onRunTests}
+                onAutoRepair={onAutoRepair}
+                onSuggestionClick={onSuggestionClick}
+              />
+            );
+          })()}
+        </>
       )}
       <div ref={bottomRef} />
     </div>

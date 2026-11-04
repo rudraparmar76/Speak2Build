@@ -22,13 +22,20 @@ export type WebviewToHost =
       transcript: string;
       answers?: Record<string, string>;
       contextSnippets?: Snippet[];
+      conversationHistory?: Array<{ role: string; content: string }>;
     }
   /** Scan workspace for project context. */
   | { type: "scanContext"; workspaceRoot: string }
   /** Request relevant snippets from user-selected files. */
   | { type: "getRelevantContext"; requirementText?: string; filePaths: string[] }
   /** Generate code diffs from requirement + context. */
-  | { type: "generateCode"; requirementText: string; contextSnippets: Snippet[]; options?: Record<string, unknown> }
+  | {
+      type: "generateCode";
+      requirementText: string;
+      contextSnippets: Snippet[];
+      options?: Record<string, unknown>;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    }
   /** Apply a unified diff to the workspace. */
   | { type: "applyDiff"; unifiedDiff: string; workspaceRoot: string }
   /** Apply multiple unified diffs sequentially to the workspace. */
@@ -295,6 +302,7 @@ export type HostToWebview =
   | { type: "testRunResult"; result: TestRunResult }
   | { type: "voiceCommandExecuted"; action: string; feedbackSpeech: string }
   | { type: "bargeInTriggered" }
+  | { type: "toggleRecordingHotkey" }
   | { type: "autoListenState"; enabled: boolean; state: string }
 
   | { type: "testFrameworkDetected"; framework: string; name: string }

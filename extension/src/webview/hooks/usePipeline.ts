@@ -159,6 +159,13 @@ export function usePipeline(options: PipelineOptions) {
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
+  const getConversationHistory = useCallback(() => {
+    return messagesRef.current
+      .filter((m) => m.content && m.status !== "error" && m.status !== "thinking")
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
+  }, []);
+
   /** Updates a specific assistant message by id (falls back to last assistant). */
   const updateMessageById = useCallback(
     (msgId: string, updater: (msg: ChatMessage) => ChatMessage) => {
@@ -277,6 +284,7 @@ export function usePipeline(options: PipelineOptions) {
         type: "extractRequirements",
         transcript: currentPromptRef.current,
         ...(snippets.length > 0 ? { contextSnippets: snippets } : {}),
+        conversationHistory: getConversationHistory(),
       });
     },
     [postMessage, updateAssistantMessage],
@@ -321,6 +329,7 @@ export function usePipeline(options: PipelineOptions) {
           requirementText: requirement.task,
           contextSnippets: currentSnippetsRef.current,
           options: { include_tests: true },
+          conversationHistory: getConversationHistory(),
         });
       }
     },
@@ -368,6 +377,7 @@ export function usePipeline(options: PipelineOptions) {
         ...(currentSnippetsRef.current.length > 0
           ? { contextSnippets: currentSnippetsRef.current }
           : {}),
+        conversationHistory: getConversationHistory(),
       });
     },
     [postMessage, pushHistory],

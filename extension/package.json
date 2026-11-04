@@ -29,6 +29,25 @@
         }
       ]
     },
+    "commands": [
+      {
+        "command": "speak2build.focus",
+        "title": "Speak2Build: Open Assistant",
+        "category": "Speak2Build"
+      },
+      {
+        "command": "speak2build.toggleRecording",
+        "title": "Speak2Build: Toggle Voice Recording",
+        "category": "Speak2Build"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "speak2build.toggleRecording",
+        "key": "ctrl+alt+space",
+        "mac": "cmd+alt+space"
+      }
+    ],
     "configuration": {
       "title": "Speak2Build",
       "properties": {

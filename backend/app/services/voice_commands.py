@@ -23,6 +23,8 @@ FEEDBACK_MESSAGES = {
     "new_session": "Starting a new session.",
     "stop_listening": "Stopping hands-free listening.",
     "start_listening": "Hands-free listening is on.",
+    "auto_apply_on": "Auto-apply is on. Changes will be applied automatically.",
+    "auto_apply_off": "Auto-apply is off.",
     "cancel": "Cancelled.",
 }
 
@@ -187,7 +189,35 @@ def classify_voice_command(transcript: str) -> CommandMatch:
                 feedback_speech=FEEDBACK_MESSAGES["start_listening"],
             )
 
-    # 8. CANCEL COMMANDS
+    # 8. AUTO APPLY COMMANDS
+    # Matches: "enable auto apply", "auto apply on", "turn on auto apply", "auto apply mode"
+    auto_apply_on_patterns = [
+        r"^(?:please\s+|can\s+you\s+)?(?:enable|turn\s+on|activate)\s+auto[- ]?apply$",
+        r"^(?:auto[- ]?apply\s+(?:on|mode|please)|auto[- ]?apply)$",
+    ]
+    for pat in auto_apply_on_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="auto_apply_on",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["auto_apply_on"],
+            )
+
+    auto_apply_off_patterns = [
+        r"^(?:please\s+|can\s+you\s+)?(?:disable|turn\s+off|deactivate)\s+auto[- ]?apply$",
+        r"^auto[- ]?apply\s+off$",
+    ]
+    for pat in auto_apply_off_patterns:
+        if re.match(pat, clean):
+            return CommandMatch(
+                is_command=True,
+                action="auto_apply_off",
+                confidence=0.95,
+                feedback_speech=FEEDBACK_MESSAGES["auto_apply_off"],
+            )
+
+    # 9. CANCEL COMMANDS
     # Matches: "cancel", "cancel that", "never mind", "abort"
     cancel_patterns = [
         r"^(?:please\s+)?(?:cancel(?:\s+that)?|never\s+mind|abort)$",

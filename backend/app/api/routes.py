@@ -378,15 +378,12 @@ def extract_requirements(payload: ExtractRequest) -> ExtractionResponse:
             ),
         )
     try:
-        if payload.context_snippets:
-            try:
-                outcome = requirements_service.extract_from(
-                    payload.transcript, payload.answers, payload.context_snippets
-                )
-            except TypeError:
-                outcome = requirements_service.extract_from(payload.transcript, payload.answers)
-        else:
-            outcome = requirements_service.extract_from(payload.transcript, payload.answers)
+        outcome = requirements_service.extract_from(
+            payload.transcript,
+            payload.answers,
+            payload.context_snippets,
+            payload.conversation_history,
+        )
     except LLMUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except LLMRequestError as exc:
@@ -466,10 +463,13 @@ def generate_code(payload: GenerateRequest) -> GenerateResponse:
             workspace_root = Path.cwd()
 
     try:
+        options = dict(payload.options)
+        if payload.conversation_history and "conversation_history" not in options:
+            options["conversation_history"] = payload.conversation_history
         outcome = generation_service.generate_code(
             requirement_text=payload.requirement_text,
             context_snippets=payload.context_snippets,
-            options=payload.options,
+            options=options,
             workspace_root=str(workspace_root),
         )
     except LLMUnavailableError as exc:

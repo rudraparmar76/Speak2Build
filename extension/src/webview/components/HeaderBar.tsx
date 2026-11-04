@@ -10,10 +10,12 @@ interface HeaderBarProps {
   voiceOn: boolean;
   speaking: boolean;
   autoListen?: boolean;
+  autoApply?: boolean;
   showSettings: boolean;
   sessionCount: number;
   onToggleVoice: () => void;
   onToggleAutoListen?: () => void;
+  onToggleAutoApply?: () => void;
   onStopSpeaking: () => void;
   onToggleSettings: () => void;
   onNewSession: () => void;
@@ -24,10 +26,12 @@ export function HeaderBar({
   voiceOn,
   speaking,
   autoListen = false,
+  autoApply = false,
   showSettings,
   sessionCount,
   onToggleVoice,
   onToggleAutoListen,
+  onToggleAutoApply,
   onStopSpeaking,
   onToggleSettings,
   onNewSession,
@@ -56,6 +60,18 @@ export function HeaderBar({
             Speaking…
           </button>
         )}
+
+        <button
+          className={`header-bar__btn settings-gear-btn header-bar__btn--auto-apply${autoApply ? " active" : ""}`}
+          onClick={onToggleAutoApply}
+          title={
+            autoApply
+              ? "Auto-Apply is ON (⚡) — Verified diffs apply automatically. Click to disable."
+              : "Auto-Apply is OFF (⚡) — Click to enable auto-applying verified code."
+          }
+        >
+          ⚡
+        </button>
 
         <button
           className={`header-bar__btn settings-gear-btn${autoListen ? " active header-bar__btn--listening" : ""}`}

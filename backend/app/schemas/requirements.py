@@ -28,9 +28,10 @@ class RequirementModel(BaseModel):
 
 
 class ExtractRequest(BaseModel):
-    transcript: str = Field(min_length=3, max_length=8000)
+    transcript: str = Field(min_length=1, max_length=8000)
     answers: dict[str, str] | None = None
     context_snippets: list[dict] = Field(default_factory=list)
+    conversation_history: list[dict] = Field(default_factory=list)
 
 
 class ExtractionResponse(BaseModel):

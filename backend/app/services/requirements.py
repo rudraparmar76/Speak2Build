@@ -77,8 +77,18 @@ def build_user_prompt(
     transcript: str,
     answers: dict[str, str] | None,
     context_snippets: list[dict] | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> str:
     parts = [f"TRANSCRIPT:\n\"\"\"\n{transcript}\n\"\"\""]
+    if conversation_history:
+        lines = []
+        for msg in conversation_history[-6:]:
+            role = "Developer" if msg.get("role") == "user" else "Assistant"
+            content = (msg.get("content") or "").strip()
+            if content:
+                lines.append(f"{role}: {content}")
+        if lines:
+            parts.insert(0, "PRIOR CONVERSATION CONTEXT:\n" + "\n".join(lines))
     if context_snippets:
         snippets_text = []
         for s in context_snippets:
@@ -109,10 +119,11 @@ class RequirementsService:
         transcript: str,
         answers: dict[str, str] | None = None,
         context_snippets: list[dict] | None = None,
+        conversation_history: list[dict] | None = None,
     ) -> ExtractionOutcome:
         started = time.monotonic()
         system = SYSTEM_PROMPT
-        user = build_user_prompt(transcript, answers, context_snippets)
+        user = build_user_prompt(transcript, answers, context_snippets, conversation_history)
 
         feedback: str | None = None
         for attempt in range(1, self._max_attempts + 1):
@@ -200,6 +211,7 @@ def extract_from(
     transcript: str,
     answers: dict[str, str] | None = None,
     context_snippets: list[dict] | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> ExtractionOutcome:
     from app.services.llm_client import load_config_from_env
 
@@ -212,7 +224,7 @@ def extract_from(
     from app.services.llm_client import OpenAICompatibleLLM
 
     service = RequirementsService(OpenAICompatibleLLM(config), model_name=config.model)
-    return service.extract(transcript, answers, context_snippets)
+    return service.extract(transcript, answers, context_snippets, conversation_history)
 
 
 __all__ = [

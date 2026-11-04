@@ -39,6 +39,12 @@ const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
 export class SidebarPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "speak2build.sidebar";
 
+  public onStateChange?: (state: "idle" | "listening" | "recording" | "generating") => void;
+
+  public toggleRecordingHotkey(): void {
+    this.post({ type: "toggleRecordingHotkey" });
+  }
+
   private _view?: vscode.WebviewView;
   private readonly sessions: SessionStore;
   private bargeInPollTimer?: NodeJS.Timeout;
@@ -256,6 +262,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "startRecording": {
+          this.onStateChange?.("recording");
           const info = await client.startRecording();
           this.post({
             type: "recordingStarted",
@@ -265,6 +272,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "stopRecording": {
+          this.onStateChange?.(this.autoListenActive ? "listening" : "idle");
           const result = await client.stopRecording();
           this.post({
             type: "audioUploaded",
@@ -277,6 +285,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "cancelRecording": {
+          this.onStateChange?.(this.autoListenActive ? "listening" : "idle");
           await client.cancelRecording();
           this.post({ type: "recordingCancelled" });
           break;
@@ -328,6 +337,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             message.transcript,
             message.answers,
             message.contextSnippets,
+            message.conversationHistory,
           );
           this.post({
             type: "requirements",
@@ -423,6 +433,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "generateCode": {
+          this.onStateChange?.("generating");
           const folders = vscode.workspace.workspaceFolders;
           if (!folders || folders.length === 0) {
             this.post({
@@ -437,7 +448,9 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
             message.contextSnippets,
             message.options,
             workspaceRoot,
+            message.conversationHistory,
           );
+          this.onStateChange?.(this.autoListenActive ? "listening" : "idle");
           this.post({
             type: "generationResult",
             result: {

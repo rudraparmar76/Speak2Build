@@ -75,6 +75,7 @@ export function App() {
   const [revertingDiff, setRevertingDiff] = useState<string | null>(null);
   const [dismissedDiffs, setDismissedDiffs] = useState<Set<string>>(new Set());
   const [runningTests, setRunningTests] = useState(false);
+  const [autoApply, setAutoApply] = useState(false);
   const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
   const [testFramework, setTestFramework] = useState<{ framework: string; name: string }>({
     framework: "auto",
@@ -362,6 +363,14 @@ export function App() {
           pushHistory("🎙️ Voice barge-in detected! Interrupted AI playback.");
           break;
         }
+        case "toggleRecordingHotkey": {
+          if (recorderState === "recording") {
+            stopRecording();
+          } else if (recorderState === "idle") {
+            startRecording();
+          }
+          break;
+        }
         case "audioUploaded": {
           setRecorderState("idle");
           setLastUpload({
@@ -447,6 +456,16 @@ export function App() {
         case "generationResult": {
           setGenerationResult(message.result);
           handleGenerationResult(message.result);
+
+          // Auto-apply mode: automatically apply diffs if valid
+          if (autoApply && message.result.diffs.length > 0) {
+            const hasNoErrors = (message.result.validationErrors?.length ?? 0) === 0;
+            if (hasNoErrors) {
+              const diffsToApply = message.result.diffs.map((d) => d.unifiedDiff);
+              applyAllDiffs(diffsToApply);
+              pushHistory(`⚡ Auto-applied ${diffsToApply.length} diff(s).`);
+            }
+          }
           break;
         }
         case "diffApplied": {
@@ -483,6 +502,15 @@ export function App() {
           break;
         }
         case "voiceCommandExecuted": {
+          if (message.action === "auto_apply_on") {
+            setAutoApply(true);
+            pushHistory("⚡ Auto-apply mode enabled.");
+            break;
+          } else if (message.action === "auto_apply_off") {
+            setAutoApply(false);
+            pushHistory("⚡ Auto-apply mode disabled.");
+            break;
+          }
           let diffs = generationResultRef.current?.diffs ?? [];
           if (diffs.length === 0) {
             diffs = messagesRef.current.flatMap((m) => m.diffs ?? []);
@@ -623,6 +651,22 @@ export function App() {
     handleTestResult,
     handlePipelineError,
   ]);
+
+  // In-webview keyboard shortcut (Ctrl+Alt+Space)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && (e.code === "Space" || e.key === " ")) {
+        e.preventDefault();
+        if (recorderState === "recording") {
+          stopRecording();
+        } else if (recorderState === "idle") {
+          startRecording();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [recorderState, startRecording, stopRecording]);
 
   // Initial mount health check & active session restore
   useEffect(() => {
@@ -775,7 +819,9 @@ export function App() {
         voiceOn={voiceOn}
         speaking={speaking}
         autoListen={autoListen}
+        autoApply={autoApply}
         onToggleAutoListen={handleToggleAutoListen}
+        onToggleAutoApply={() => setAutoApply((prev) => !prev)}
         showSettings={showSettings}
         sessionCount={sessionList.length}
         onToggleVoice={() => {

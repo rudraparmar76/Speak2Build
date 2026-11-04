@@ -18,6 +18,7 @@ class GenerateRequest(BaseModel):
     context_snippets: list[dict] = Field(default_factory=list)
     options: dict = Field(default_factory=dict)
     workspace_root: Optional[str] = None
+    conversation_history: list[dict] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):

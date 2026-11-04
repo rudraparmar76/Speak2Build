@@ -924,14 +924,26 @@ class CodeGenerationService:
         # Build context summary for prompt
         context_summary = self._build_context_summary(augmented_snippets)
 
-        user_prompt = f"""REQUIREMENT:
+        history = options.get("conversation_history") or []
+        history_prefix = ""
+        if history:
+            lines = []
+            for msg in history[-6:]:
+                role = "Developer" if msg.get("role") == "user" else "Assistant"
+                content = (msg.get("content") or "").strip()
+                if content:
+                    lines.append(f"{role}: {content}")
+            if lines:
+                history_prefix = "PRIOR CONVERSATION CONTEXT:\n" + "\n".join(lines) + "\n\n"
+
+        user_prompt = f"""{history_prefix}REQUIREMENT:
 {requirement_text}
 
 CONTEXT SNIPPETS:
 {context_summary}
 
 OPTIONS:
-{json.dumps(options, indent=2)}
+{json.dumps({k: v for k, v in options.items() if k != "conversation_history"}, indent=2)}
 
 Return ONLY the JSON object with files and summary. Do NOT use markdown fences.
 """
