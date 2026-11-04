@@ -36,7 +36,7 @@ def fake_outcome(monkeypatch: pytest.MonkeyPatch):
         repaired=False,
     )
     monkeypatch.setattr(requirements, "is_configured", lambda: True)
-    monkeypatch.setattr(requirements, "extract_from", lambda t, a=None: outcome)
+    monkeypatch.setattr(requirements, "extract_from", lambda *args, **kwargs: outcome)
     return outcome
 
 
@@ -65,7 +65,7 @@ def test_provider_unreachable_maps_to_503(monkeypatch):
     monkeypatch.setattr(
         requirements,
         "extract_from",
-        lambda t, a=None: _raise(requirements.LLMUnavailableError("connection refused")),
+        lambda *args, **kwargs: _raise(requirements.LLMUnavailableError("connection refused")),
     )
 
     response = client.post("/api/requirements", json=VALID_PAYLOAD)
@@ -79,7 +79,7 @@ def test_provider_500_maps_to_502(monkeypatch):
     monkeypatch.setattr(
         requirements,
         "extract_from",
-        lambda t, a=None: _raise(requirements.LLMRequestError("boom")),
+        lambda *args, **kwargs: _raise(requirements.LLMRequestError("boom")),
     )
 
     response = client.post("/api/requirements", json=VALID_PAYLOAD)
@@ -92,7 +92,7 @@ def test_unrepairable_output_maps_to_422(monkeypatch):
     monkeypatch.setattr(
         requirements,
         "extract_from",
-        lambda t, a=None: _raise(requirements.RequirementExtractionError("boom")),
+        lambda *args, **kwargs: _raise(requirements.RequirementExtractionError("boom")),
     )
 
     response = client.post("/api/requirements", json=VALID_PAYLOAD)
@@ -101,14 +101,14 @@ def test_unrepairable_output_maps_to_422(monkeypatch):
 
 
 def test_short_transcript_is_rejected_422():
-    response = client.post("/api/requirements", json={"transcript": "hi"})
+    response = client.post("/api/requirements", json={"transcript": ""})
     assert response.status_code == 422
 
 
 def test_answers_passed_through(monkeypatch):
     seen = {}
 
-    def fake_extract(transcript, answers=None):
+    def fake_extract(transcript, answers=None, *args, **kwargs):
         seen["answers"] = answers
         return requirements.ExtractionOutcome(
             requirement=requirements.RequirementModel(task="t"),
@@ -132,7 +132,7 @@ def test_answers_passed_through(monkeypatch):
 def test_context_snippets_passed_through(monkeypatch):
     seen = {}
 
-    def fake_extract(transcript, answers=None, context_snippets=None):
+    def fake_extract(transcript, answers=None, context_snippets=None, *args, **kwargs):
         seen["snippets"] = context_snippets
         return requirements.ExtractionOutcome(
             requirement=requirements.RequirementModel(task="t"),

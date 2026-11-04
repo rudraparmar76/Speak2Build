@@ -33,22 +33,16 @@ Respond with ONLY a JSON object — no markdown fences, no commentary:
 }
 
 Rules:
-- Fold explicit developer answers below into the requirement as facts, and do
-  NOT re-ask anything already answered.
-- If PROJECT CONTEXT is provided, inspect the existing code to determine the framework
-  (e.g., Flask vs FastAPI), existing endpoints, parameter styles, and conventions.
-  Align the task, inputs, and outputs with the actual codebase.
-- NEVER ask the developer to share, paste, or provide existing code, endpoint signatures,
-  or file structures in clarification questions (e.g., do NOT ask "Please share the code"
-  or "What is the endpoint signature?"). In Speak2Build, existing code is inspected directly
-  from the workspace.
-- If existing code is not yet provided, do NOT ask the developer to paste code; assume standard
-  conventions or defer implementation details to the code inspection and generation phase.
-- Clarifications must ONLY be asked for genuine business logic, user experience, or product
-  decisions that cannot be inferred from the codebase (e.g., edge-case behavior, business rules).
-- Keep clarifications concise (prefer at most 2-3 essential questions; do not overwhelm the developer).
-- Every clarification must be a single, individually answerable question.
-- If the request is already fully specified or clear from context, `clarifications` must be [].
+- Speak2Build is an autonomous developer assistant that crawls the codebase and develops knowledge itself. DEFAULT to "clarifications": [].
+- NEVER ask clarification questions for standard software engineering tasks:
+  * Adding, updating, or generating unit tests, integration tests, or test suites (e.g. NEVER ask what edge cases, scenarios, mock strategies, or endpoints to test; inspect the workspace code and generate comprehensive test coverage autonomously).
+  * Refactoring, code cleanup, error handling, input validation, logging, or bug fixes.
+  * Creating endpoints, functions, classes, or database operations whose details can be reasonably inferred from context.
+- NEVER ask the developer about edge cases, parameter types, error handling, test scenarios, or implementation details. Deduce them by reading the workspace code and follow standard software engineering best practices.
+- NEVER ask the developer to share, paste, describe, or clarify existing code, file structures, or endpoint signatures. All existing code is inspected directly from the workspace.
+- Fold explicit developer answers below into the requirement as facts, and do NOT re-ask anything already answered.
+- If PROJECT CONTEXT is provided, inspect the existing code to determine the framework (e.g., Flask vs FastAPI), existing endpoints, parameter styles, and conventions. Align the task, inputs, and outputs directly with the codebase.
+- Clarifications are an absolute LAST RESORT. ONLY ask if a high-level business requirement is fundamentally missing or impossible to proceed without. If in doubt, assume reasonable defaults, record them under constraints/acceptance_criteria, and set "clarifications": [].
 - Language is "python" (MVP).
 """
 

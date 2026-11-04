@@ -115,10 +115,10 @@ def classify_voice_command(transcript: str) -> CommandMatch:
             )
 
     # 3. RUN TESTS COMMANDS
-    # Matches: "run tests", "run workspace tests", "test it", "check tests", "run the tests"
+    # Matches: "run tests", "run workspace tests", "test", "test it", "test code", "check tests", "run the tests"
     test_patterns = [
         r"^(?:please\s+|can\s+you\s+)?(?:run|execute|check)\s+(?:the\s+)?(?:workspace\s+)?tests?(?:\s+please|\s+now)?$",
-        r"^(?:test\s+it|run\s+tests?|check\s+the\s+tests?)$",
+        r"^(?:test\s+it|test\s+code|run\s+tests?|check\s+the\s+tests?|test)$",
     ]
     for pat in test_patterns:
         if re.match(pat, clean):
@@ -130,10 +130,10 @@ def classify_voice_command(transcript: str) -> CommandMatch:
             )
 
     # 4. AUTO REPAIR COMMANDS
-    # Matches: "fix it", "auto repair", "repair tests", "fix the tests", "yes fix it", "repair code"
+    # Matches: "fix it", "auto repair", "repair test", "repair tests", "fix test", "fix tests", "fix the tests", "yes fix it", "repair code"
     repair_patterns = [
-        r"^(?:please\s+|can\s+you\s+|yes\s+)?(?:auto[- ]?)?(?:fix|repair)(?:\s+(?:it|the\s+tests?|errors?|code|them))?(?:\s+please|\s+now)?$",
-        r"^(?:yes\s+please|yes\s+fix|auto\s+repair\s+tests?)$",
+        r"^(?:please\s+|can\s+you\s+|yes\s+)?(?:auto[- ]?)?(?:fix|repair)(?:\s+(?:it|(?:the\s+)?tests?|errors?|code|them))?(?:\s+please|\s+now)?$",
+        r"^(?:yes\s+please|yes\s+fix|auto\s+repair(?:\s+tests?)?|fix\s+tests?)$",
     ]
     for pat in repair_patterns:
         if re.match(pat, clean):

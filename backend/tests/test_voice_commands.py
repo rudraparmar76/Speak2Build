@@ -47,15 +47,21 @@ def test_classify_reject_commands():
 
 
 def test_classify_run_tests_commands():
+    assert classify_voice_command("test").action == "run_tests"
+    assert classify_voice_command("test it").action == "run_tests"
+    assert classify_voice_command("test code").action == "run_tests"
     assert classify_voice_command("run tests").action == "run_tests"
     assert classify_voice_command("run workspace tests").action == "run_tests"
-    assert classify_voice_command("test it").action == "run_tests"
     assert classify_voice_command("check tests").action == "run_tests"
     assert classify_voice_command("run the tests!").action == "run_tests"
 
 
 def test_classify_auto_repair_commands():
     assert classify_voice_command("fix it").action == "repair"
+    assert classify_voice_command("fix test").action == "repair"
+    assert classify_voice_command("fix tests").action == "repair"
+    assert classify_voice_command("repair test").action == "repair"
+    assert classify_voice_command("repair tests").action == "repair"
     assert classify_voice_command("auto repair").action == "repair"
     assert classify_voice_command("repair it").action == "repair"
     assert classify_voice_command("fix the tests").action == "repair"
