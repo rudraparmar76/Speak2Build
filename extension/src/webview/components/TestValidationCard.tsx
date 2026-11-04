@@ -26,6 +26,17 @@ export function TestValidationCard({
   onRunTests,
   onAutoRepair,
 }: TestValidationCardProps): ReactNode {
+  const isNoTests =
+    testRunResult?.total === 0 ||
+    testRunResult?.summary?.toLowerCase().includes("no tests collected") ||
+    false;
+
+  const boxClass = isNoTests
+    ? "warning"
+    : testRunResult?.success
+    ? "success"
+    : "failed";
+
   return (
     <div className="test-validation-section">
       <div className="sub-label">Workspace Test Validation</div>
@@ -36,12 +47,22 @@ export function TestValidationCard({
       >
         {runningTests ? "Running tests…" : `🧪 Run Workspace Tests (${testFrameworkName})`}
       </button>
+
       {testRunResult && (
-        <div className={`test-result-box ${testRunResult.success ? "success" : "failed"}`}>
+        <div className={`test-result-box ${boxClass}`}>
           <p style={{ margin: "0 0 4px 0" }}>
-            <strong>{testRunResult.success ? "✓ Tests Passed" : "✗ Tests Failed"}:</strong> {testRunResult.summary}
+            <strong>
+              {isNoTests
+                ? "ℹ️ No Tests Found"
+                : testRunResult.success
+                ? "✓ Tests Passed"
+                : "✗ Tests Failed"}
+              :
+            </strong>{" "}
+            {testRunResult.summary}
           </p>
-          {!testRunResult.success && (
+
+          {!testRunResult.success && !isNoTests && (
             <button
               className="button primary"
               style={{ marginTop: 8, width: "100%" }}
@@ -51,8 +72,15 @@ export function TestValidationCard({
               {generating ? "Auto-repairing with AI…" : "⚡ Auto-Repair with AI (or say \"fix it\")"}
             </button>
           )}
+
+          {isNoTests && (
+            <p style={{ margin: "6px 0 0", fontSize: "11px", opacity: 0.85 }}>
+              No test files (e.g. <code>test_*.py</code>) exist in this project yet. Ask Speak2Build: <em>"Add unit tests for this"</em> to generate them.
+            </p>
+          )}
+
           {testRunResult.output && (
-            <details style={{ marginTop: "4px" }}>
+            <details style={{ marginTop: "6px" }}>
               <summary style={{ cursor: "pointer", opacity: 0.8 }}>View test output log</summary>
               <pre className="test-output-log">{testRunResult.output}</pre>
             </details>
