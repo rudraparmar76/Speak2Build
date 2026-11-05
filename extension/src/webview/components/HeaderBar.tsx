@@ -1,3 +1,4 @@
+import { LOGO_BASE64 } from "../logoBase64";
 import type { ReactNode } from "react";
 
 /**
@@ -42,6 +43,13 @@ export function HeaderBar({
   return (
     <header className="header-bar">
       <div className="header-bar__brand">
+        <img
+          src={LOGO_BASE64}
+          alt=""
+          className="header-bar__logo"
+          width={22}
+          height={22}
+        />
         <span className="header-bar__title">Speak2Build</span>
         {autoListen && (
           <span className="header-bar__listening-pill" title="Always-listening hands-free mode active">

@@ -1,3 +1,4 @@
+import { LOGO_BASE64 } from "../logoBase64";
 import type { ReactNode } from "react";
 
 /**
@@ -24,9 +25,18 @@ export function WelcomeScreen({
 }: WelcomeScreenProps): ReactNode {
   return (
     <div className="welcome-screen">
-      <h2 className="welcome-screen__title">👋 Welcome to Speak2Build</h2>
+      <div className="welcome-screen__emblem">
+        <img
+          src={LOGO_BASE64}
+          alt="Speak2Build"
+          className="welcome-screen__logo"
+          width={54}
+          height={54}
+        />
+      </div>
+      <h2 className="welcome-screen__title">Welcome to Speak2Build</h2>
       <p className="welcome-screen__subtitle">
-        Press the mic button or type below to start coding by voice.
+        Voice-first AI pair programmer for Python. Press the mic button or type below.
       </p>
 
       {onStartTour && (

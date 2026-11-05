@@ -926,7 +926,7 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:;" />
+        content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https: data:;" />
   <title>Speak2Build</title>
 </head>
 <body>

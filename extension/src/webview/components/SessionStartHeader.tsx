@@ -17,7 +17,7 @@ export function SessionStartHeader({ startedAt }: SessionStartHeaderProps): Reac
     <div className="chat-session-start" role="separator" aria-label="Chat session started">
       <div className="chat-session-start__divider" />
       <div className="chat-session-start__badge">
-        <span className="chat-session-start__icon">🚀</span>
+        <span className="chat-session-start__icon">💬</span>
         <span className="chat-session-start__text">
           Chat Session Started{formattedTime ? ` · ${formattedTime}` : ""}
         </span>
