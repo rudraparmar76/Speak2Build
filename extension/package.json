@@ -9,7 +9,9 @@
     "vscode": "^1.96.0"
   },
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -59,7 +61,14 @@
         "speak2build.llmProvider": {
           "type": "string",
           "default": "custom",
-          "enum": ["google-ai-studio", "groq", "ollama", "nvidia-nim", "openai", "custom"],
+          "enum": [
+            "google-ai-studio",
+            "groq",
+            "ollama",
+            "nvidia-nim",
+            "openai",
+            "custom"
+          ],
           "enumDescriptions": [
             "Google AI Studio (Gemini) — free tier, fast, great code quality",
             "Groq Cloud — blazing fast (2-5s), generous free tier",
@@ -102,7 +111,9 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies --skip-license --allow-missing-repository"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -115,5 +126,6 @@
     "@types/vscode": "^1.96.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.2"
-  }
+  },
+  "icon": "media/icon-64.png"
 }
