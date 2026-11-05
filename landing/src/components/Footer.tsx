@@ -3,13 +3,13 @@ import { ArrowUpRight } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="bg-alma-aioli/60 border-t border-black/5 py-14 text-alma-teriyaki/70">
+    <footer className="bg-alma-aioli/60 border-t border-black/5 py-12 text-alma-teriyaki/70">
       <div className="max-w-content mx-auto px-section-mobile lg:px-section">
-        {/* Main Footer Row */}
-        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-8 pb-10 border-b border-black/5 text-center md:text-left">
+        {/* Main Footer Row (Left: Brand | Right: Links & Install in the exact same line) */}
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 pb-8 border-b border-black/5 text-center lg:text-left">
           {/* Brand Info */}
-          <div className="space-y-2 max-w-sm">
-            <div className="flex items-center justify-center md:justify-start gap-2.5">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm shrink-0">
                 <Image
                   src="/icon.png"
@@ -23,14 +23,14 @@ export function Footer() {
                 Speak2Build
               </span>
             </div>
-            <p className="text-xs text-alma-teriyaki/60 leading-relaxed font-sans">
-              Hands-free voice-first AI pair programmer for Visual Studio Code.
-              Turn your ideas into production-ready code.
+            <span className="hidden sm:inline text-black/15">|</span>
+            <p className="text-xs text-alma-teriyaki/60 font-sans">
+              Hands-free voice-first AI pair programmer for VS Code.
             </p>
           </div>
 
-          {/* Quick Nav Links */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium">
+          {/* Quick Nav Links + Install Button in the SAME LINE */}
+          <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 text-xs font-medium">
             <a href="#features" className="hover:text-alma-collard transition-colors">
               Features
             </a>
@@ -51,13 +51,10 @@ export function Footer() {
             >
               GitHub <ArrowUpRight className="w-3 h-3" />
             </a>
-          </div>
-
-          {/* Install Pill CTA */}
-          <div className="flex items-center gap-3">
+            {/* Install Extension on the SAME line */}
             <a
               href="#install"
-              className="px-4 py-2 rounded-pill bg-alma-surface border border-black/10 hover:border-black/20 text-xs font-medium text-alma-teriyaki shadow-sm transition-all hover:-translate-y-0.5"
+              className="px-4 py-2 rounded-pill bg-alma-surface border border-black/10 hover:border-black/20 text-xs font-medium text-alma-teriyaki shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap ml-1 sm:ml-2"
             >
               Install Extension
             </a>
