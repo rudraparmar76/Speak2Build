@@ -1,25 +1,61 @@
 # Speak2Build for Visual Studio Code
 
-Voice-first AI pair programmer for Python projects. Turn spoken ideas into production-ready code with local voice activity detection (Silero VAD), local speech transcription (Whisper), and multi-LLM orchestration.
+Voice-first AI pair programmer for Python projects. Speak or type a request,
+review the generated patch, validate it, and approve changes from inside VS
+Code.
 
 ## Features
 
-- **Zero Configuration**: The extension automatically starts and manages the local backend sidecar process in the background on launch.
-- **Hands-Free Voice Coding**: Always-Listening mode with Silero VAD (< 200ms latency) and push-to-talk.
-- **Project-Aware Context Crawling**: Automatically indexes relevant project files, imports, and symbols.
-- **Self-Healing Code Verification**: Runs pytest automatically on generated code and repairs syntax or test failures.
-- **Unified Diff Review**: Side-by-side and inline unified diff viewer with single-click or voice-driven Accept / Reject actions.
-- **Multi-LLM Support**: Supports Google AI Studio (Gemini), Groq Cloud, local Ollama, NVIDIA NIM, OpenAI, or custom endpoints.
+- Push-to-talk and hands-free voice input.
+- Local transcription with Whisper and Silero VAD.
+- Project-aware workspace context.
+- Configurable Gemini, Groq, Ollama, NVIDIA NIM, OpenAI, and custom providers.
+- Unified diff review with voice or button-based apply and reject actions.
+- Pytest validation and AI-assisted repair.
 
-## Extension Settings
+## Screenshots
 
-Configure via **Settings > Extensions > Speak2Build** or the in-extension ⚙ gear button:
+![Speak2Build home screen](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/home_screen.png)
 
-- `speak2build.backendUrl`: URL of the local backend service (default: `http://127.0.0.1:8000`).
-- `speak2build.llmProvider`: Chosen LLM provider (`google-ai-studio`, `groq`, `ollama`, `nvidia-nim`, `openai`, `custom`).
-- `speak2build.llmApiKey`: API key for the chosen provider (not needed for local Ollama).
-- `speak2build.llmModel`: Model name override (optional).
+![LLM provider configuration](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/llm_config.png)
 
-## Keyboard Shortcuts
+![Voice-driven execution](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/voice_execution.png)
+
+![Generated code diff](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/code_generation.png)
+
+![Test validation and auto-repair](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/test_code.png)
+
+![Auto-repair output](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/auto_repair_output.png)
+
+## Installation
+
+From the repository:
+
+```powershell
+npm install
+npm run build
+```
+
+To package and install the VSIX:
+
+```powershell
+npx @vscode/vsce package
+code --install-extension speak2build-0.1.0.vsix
+```
+
+The extension automatically starts the local backend sidecar. For development,
+press **F5** from the repository root to launch an Extension Development Host.
+
+## Settings
+
+Configure these from **Settings > Extensions > Speak2Build** or the in-panel
+gear button:
+
+- `speak2build.backendUrl`: Backend URL, default `http://127.0.0.1:8000`.
+- `speak2build.llmProvider`: Provider identifier.
+- `speak2build.llmApiKey`: Provider API key; not needed for local Ollama.
+- `speak2build.llmModel`: Optional model override.
+
+## Keyboard shortcut
 
 - `Ctrl+Alt+Space` (macOS: `Cmd+Alt+Space`): Toggle voice recording.

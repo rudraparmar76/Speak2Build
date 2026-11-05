@@ -113,8 +113,13 @@ export class SidebarPanelProvider implements vscode.WebviewViewProvider {
       const res = await c.setAutoListen(true);
       this.lastAutoListenState = res.state;
       this.post({ type: "autoListenState", enabled: true, state: res.state });
-    } catch {
-      // best-effort
+    } catch (error) {
+      this.autoListenActive = false;
+      this.stopAutoListenPolling();
+      this.post({
+        type: "hostError",
+        message: `Could not enable always-listening mode: ${describeError(error, this.getBackendUrl())}`,
+      });
     }
 
     this.autoListenPollTimer = setInterval(async () => {

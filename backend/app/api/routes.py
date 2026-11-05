@@ -294,7 +294,12 @@ def get_barge_in_status() -> BargeInStatusResponse:
 def set_auto_listen(payload: AutoListenRequest) -> AutoListenStatusResponse:
     """Enable or disable always-listening Silero VAD monitoring."""
     if payload.enabled:
-        vad_listener.enable_auto_listen()
+        result = vad_listener.enable_auto_listen()
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not enable always-listening mode: {result.get('message', 'unknown error')}",
+            )
     else:
         vad_listener.disable_auto_listen()
     st = vad_listener.auto_listen_status()

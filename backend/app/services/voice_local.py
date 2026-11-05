@@ -29,7 +29,7 @@ import numpy as np
 
 ENGINE_ENV = "SPEAK2BUILD_TTS_ENGINE"  # "piper" (default) | "edge"
 PIPER_VOICE_ENV = "SPEAK2BUILD_TTS_PIPER_VOICE"
-DEFAULT_PIPER_VOICE = "en_US-lessac-medium"
+DEFAULT_PIPER_VOICE = "en_US-amy-medium"
 DOWNLOAD_TIMEOUT_SECONDS = 600
 
 # Voice files live next to the app package: <repo>/backend/models/piper/

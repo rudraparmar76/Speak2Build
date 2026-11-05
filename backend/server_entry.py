@@ -41,3 +41,4 @@ if __name__ == "__main__":
 
     print(f"[Speak2Build] Starting server on http://{args.host}:{args.port}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+

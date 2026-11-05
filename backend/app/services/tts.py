@@ -34,7 +34,9 @@ VOICE_ENV = "SPEAK2BUILD_TTS_VOICE"
 RATE_ENV = "SPEAK2BUILD_TTS_RATE"
 ENGINE_ENV = voice_local.ENGINE_ENV  # "piper" (default) | "edge"
 
-DEFAULT_VOICE = "en-US-AndrewNeural"
+# Keep the cloud fallback on a feminine voice. Local Piper uses its own
+# configured voice name (see voice_local.DEFAULT_PIPER_VOICE).
+DEFAULT_VOICE = "en-US-JennyNeural"
 DEFAULT_RATE = "+0%"
 
 MAX_TEXT_CHARS = 2000

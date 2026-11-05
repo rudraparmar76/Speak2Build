@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "speak2build",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rudraparmar76/Speak2Build.git"
+  },
+  "homepage": "https://github.com/rudraparmar76/Speak2Build",
   "engines": {
     "vscode": "^1.96.0"
   },

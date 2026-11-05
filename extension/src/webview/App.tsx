@@ -730,7 +730,20 @@ export function App() {
 
   // Initial mount health check & active session restore
   useEffect(() => {
-    vscode.postMessage({ type: "checkHealth" });
+    const checkHealth = () => {
+      vscode.postMessage({ type: "checkHealth" });
+    };
+
+    checkHealth();
+    // The backend sidecar may still be starting when the webview mounts.
+    // Keep the status in sync instead of leaving an initial connection error
+    // visible after the server becomes ready.
+    const healthTimer = window.setInterval(checkHealth, 3000);
+
+    return () => window.clearInterval(healthTimer);
+  }, []);
+
+  useEffect(() => {
     vscode.postMessage({ type: "getLlmConfig" });
     vscode.postMessage({ type: "loadSessionState" });
     vscode.postMessage({ type: "detectTestFramework" });
