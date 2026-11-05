@@ -22,8 +22,8 @@ export function MarqueeTicker() {
       <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 md:w-32 bg-gradient-to-r from-alma-aioli/95 to-transparent z-10" />
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 md:w-32 bg-gradient-to-l from-alma-aioli/95 to-transparent z-10" />
 
-      {/* Animated strip moving Left to Right */}
-      <div className="flex w-max animate-marquee-ltr">
+      {/* Animated strip moving Right to Left */}
+      <div className="flex w-max animate-marquee-rtl">
         {[...ITEMS, ...ITEMS, ...ITEMS, ...ITEMS].map((item, idx) => (
           <div key={idx} className="flex items-center gap-6 mx-5">
             <span className="text-xs md:text-sm font-medium tracking-wide text-alma-teriyaki/70 hover:text-alma-collard transition-colors cursor-default whitespace-nowrap">
