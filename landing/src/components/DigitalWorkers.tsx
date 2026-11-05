@@ -1,124 +1,110 @@
 "use client";
 
-import { Mic, Brain, GitPullRequest, Stethoscope } from "lucide-react";
+import { Mic, Eye, FileCode, Wrench, ArrowRight } from "lucide-react";
+import FadeContent from "./reactbits/FadeContent";
 
 const WORKERS = [
   {
-    id: "01",
-    role: "The Voice Conductor",
-    tagline: "Always-Listening Neural VAD & Barge-In",
-    description:
-      "Powered by an ultra-lightweight 48ms Silero VAD neural network. Speak naturally without holding down buttons. Transcribes your speech into an editable draft so you can review and correct misheard words before executing.",
     icon: Mic,
-    badge: "Voice & Speech",
-    highlights: ["48ms Silero VAD v5", "Voice barge-in interruption", "Editable transcription draft"],
+    name: "Voice Agent",
+    tagline: "Speak naturally",
+    description:
+      "Real-time Silero VAD detects speech instantly. No wake words, no buttons — just start talking and your intent becomes code.",
+    color: "bg-alma-kiwi/15",
+    iconColor: "text-alma-collard",
+    stat: "< 200ms",
+    statLabel: "latency",
   },
   {
-    id: "02",
-    role: "The Workspace Crawler",
-    tagline: "Autonomous Context & Zero Annoying Q&As",
+    icon: Eye,
+    name: "Context Crawler",
+    tagline: "Reads your workspace",
     description:
-      "Instead of asking you tedious questions about endpoint shapes or edge cases, the crawler reads your codebase, inspects existing conventions, and deduces types and test frameworks autonomously.",
-    icon: Brain,
-    badge: "AST Intelligence",
-    highlights: ["AST repository crawling", "Zero clarification questions", "Framework auto-detection"],
+      "Autonomously crawls project files, dependencies, and structure. Understands your codebase so the AI generates contextually accurate code.",
+    color: "bg-alma-teal/10",
+    iconColor: "text-alma-teal",
+    stat: "100+",
+    statLabel: "file types",
   },
   {
-    id: "03",
-    role: "The Diff Architect",
-    tagline: "Precision Syntax Diffs & Safe Application",
+    icon: FileCode,
+    name: "Diff Engine",
+    tagline: "Inline unified diffs",
     description:
-      "Generates unified syntax diffs with line-by-line clarity directly inside your chat stream. Supports voice commands like 'apply it', 'accept all', and 'reject' without touching your mouse.",
-    icon: GitPullRequest,
-    badge: "Code Synthesis",
-    highlights: ["Unified diff previews", "AST syntax safety check", "Sequential batch apply"],
+      "See exactly what changed with beautiful inline diffs. Accept or reject each change with a click — full control over every line.",
+    color: "bg-orange-50",
+    iconColor: "text-orange-600",
+    stat: "1-click",
+    statLabel: "accept/reject",
   },
   {
-    id: "04",
-    role: "The Self-Healing Healer",
-    tagline: "Automated Pytest Runner & Repair Loop",
+    icon: Wrench,
+    name: "Self-Healer",
+    tagline: "Auto-repairs tests",
     description:
-      "Directly executes your workspace test suite (pytest, npm test, cargo test). If a test breaks, simply say 'fix it' to generate surgical repair diffs rendered chronologically below the failure.",
-    icon: Stethoscope,
-    badge: "Validation & QA",
-    highlights: ["pytest / npm test runner", "Chronological repair turns", "Traceback auto-diagnosis"],
+      "When tests fail, the AI diagnoses the issue, generates a fix, and re-runs — no manual intervention required.",
+    color: "bg-purple-50",
+    iconColor: "text-purple-600",
+    stat: "Auto",
+    statLabel: "repair loop",
   },
 ];
 
 export function DigitalWorkers() {
   return (
-    <section id="workers" className="py-24 md:py-32 bg-zinc-950 border-t border-zinc-900 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 border-b border-zinc-800/80 pb-8">
-          <div>
-            <div className="flex items-center gap-2 text-brand-beige font-mono text-xs uppercase tracking-widest mb-3">
-              <span>Autonomous Engineering</span>
-              <span>•</span>
-              <span>Specialized Sub-Engines</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold uppercase tracking-tight text-white">
-              Meet Your 4 Digital Workers.
+    <section className="py-section bg-alma-aioli relative">
+      <div className="max-w-content mx-auto px-section-mobile lg:px-section">
+        <FadeContent duration={0.7}>
+          <div className="text-center mb-16">
+            <span className="tag-pill mb-4 inline-block">How it works</span>
+            <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium leading-[0.96] tracking-tight mt-4">
+              Four AI agents,
+              <br />
+              <em className="text-alma-collard">one voice.</em>
             </h2>
+            <p className="text-alma-teriyaki/50 text-lg mt-4 max-w-xl mx-auto">
+              Speak2Build coordinates four specialized agents that work together to
+              turn your voice into production-ready code.
+            </p>
           </div>
-          <p className="text-zinc-400 text-sm md:text-base max-w-md mt-4 md:mt-0 font-normal">
-            Each worker handles a specialized phase of the development lifecycle — from audio capture to self-healing test execution.
-          </p>
-        </div>
+        </FadeContent>
 
-        {/* 4 Workers Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-          {WORKERS.map((worker) => {
-            const Icon = worker.icon;
-            return (
-              <div
-                key={worker.id}
-                className="group relative rounded-2xl bg-zinc-900/40 border border-zinc-800/90 hover:border-brand-brown/70 p-8 flex flex-col justify-between transition-all duration-300 hover:shadow-2xl hover:shadow-brand-brown/10"
-              >
-                <div>
-                  {/* Top Bar with Number & Badge */}
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="font-mono text-2xl font-bold text-zinc-600 group-hover:text-brand-beige transition-colors">
-                      {worker.id}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-zinc-950 border border-zinc-800 text-xs font-mono text-brand-sand">
-                      {worker.badge}
-                    </span>
+        <div className="grid md:grid-cols-2 gap-6">
+          {WORKERS.map((worker, i) => (
+            <FadeContent key={worker.name} delay={i * 0.15} duration={0.6}>
+              <div className="card-alma p-8 h-full group">
+                <div className="flex items-start justify-between mb-6">
+                  <div
+                    className={`w-12 h-12 rounded-2xl ${worker.color} flex items-center justify-center`}
+                  >
+                    <worker.icon size={22} className={worker.iconColor} />
                   </div>
-
-                  {/* Icon & Title */}
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-accent/40 to-black border border-brand-brown/40 flex items-center justify-center mb-6 group-hover:scale-105 transition-transform">
-                    <Icon className="w-6 h-6 text-brand-beige" />
+                  <div className="text-right">
+                    <div className="font-display text-2xl font-semibold text-alma-teriyaki">
+                      {worker.stat}
+                    </div>
+                    <div className="text-xs text-alma-muted">{worker.statLabel}</div>
                   </div>
-
-                  <h3 className="text-xl sm:text-2xl font-bold uppercase tracking-tight text-white mb-2">
-                    {worker.role}
-                  </h3>
-                  <p className="text-xs font-mono text-brand-lightBrown mb-4 tracking-wide">
-                    {worker.tagline}
-                  </p>
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-6 font-normal">
-                    {worker.description}
-                  </p>
                 </div>
 
-                {/* Highlights List */}
-                <div className="pt-6 border-t border-zinc-800/60 flex flex-wrap gap-2">
-                  {worker.highlights.map((h, i) => (
-                    <span
-                      key={i}
-                      className="px-2.5 py-1 rounded bg-zinc-950/80 border border-zinc-800 text-[11px] font-mono text-zinc-300"
-                    >
-                      {h}
-                    </span>
-                  ))}
+                <h3 className="text-lg font-semibold text-alma-teriyaki mb-1">
+                  {worker.name}
+                </h3>
+                <p className="text-sm text-alma-collard font-medium mb-3">
+                  {worker.tagline}
+                </p>
+                <p className="text-sm text-alma-teriyaki/50 leading-relaxed">
+                  {worker.description}
+                </p>
+
+                <div className="mt-6 flex items-center gap-1 text-sm text-alma-collard opacity-0 group-hover:opacity-100 transition-opacity">
+                  Learn more <ArrowRight size={14} />
                 </div>
               </div>
-            );
-          })}
+            </FadeContent>
+          ))}
         </div>
       </div>
     </section>
   );
 }
-

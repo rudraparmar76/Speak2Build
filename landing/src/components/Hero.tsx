@@ -1,7 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Mic, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Layers } from "lucide-react";
+import { Mic, ArrowRight, CheckCircle2, ShieldCheck, Zap, Layers } from "lucide-react";
+import BlurText from "./reactbits/BlurText";
+import CountUp from "./reactbits/CountUp";
+import FadeContent from "./reactbits/FadeContent";
+
+const STATS = [
+  { value: 20000, suffix: "+", label: "voice commands", prefix: "" },
+  { value: 4.8, suffix: "", label: "avg rating", prefix: "★ ", decimals: 1 },
+  { value: 95, suffix: "%", label: "hands-free", prefix: "" },
+];
+
+const TRUST_BADGES = [
+  { icon: CheckCircle2, text: "Open Source" },
+  { icon: ShieldCheck, text: "Privacy First" },
+  { icon: Zap, text: "Real-time VAD" },
+  { icon: Layers, text: "Multi-LLM" },
+];
 
 export function Hero() {
   const [copied, setCopied] = useState(false);
@@ -13,107 +29,200 @@ export function Hero() {
   };
 
   return (
-    <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden bg-grid-pattern">
-      {/* Glow elements */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-brand-brown/15 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="absolute top-1/3 left-1/4 w-[300px] h-[300px] bg-brand-accent/10 blur-[90px] rounded-full pointer-events-none -z-10" />
+    <section className="hero-gradient relative overflow-hidden grain">
+      <div className="relative z-10 max-w-content mx-auto px-section-mobile lg:px-section pt-32 pb-16">
+        {/* Tag */}
+        <FadeContent delay={0} duration={0.6}>
+          <div className="flex justify-center mb-8">
+            <span className="tag-pill flex items-center gap-1.5">
+              <Mic size={12} />
+              VS Code Extension
+            </span>
+          </div>
+        </FadeContent>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center">
-        {/* Top Announcement Pill */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/90 border border-brand-brown/30 text-xs text-brand-sand backdrop-blur-md mb-8 hover:border-brand-brown/60 transition-colors cursor-default">
-          <span className="flex h-2 w-2 rounded-full bg-brand-lightBrown animate-ping" />
-          <span className="font-mono text-zinc-400">Speak2Build 2.0</span>
-          <span className="text-zinc-600">•</span>
-          <span className="text-brand-lightBrown font-medium">Hands-Free AI Pair Programmer</span>
-          <ArrowRight className="w-3.5 h-3.5 text-brand-beige" />
+        {/* Main Headline */}
+        <div className="text-center max-w-3xl mx-auto mb-6">
+          <BlurText
+            text="The voice-first AI pair programmer that fits in your editor."
+            className="font-display text-4xl sm:text-5xl lg:text-6xl font-medium leading-[1] tracking-tight text-alma-teriyaki"
+            animateBy="words"
+            delay={80}
+            stepDuration={0.5}
+            direction="bottom"
+          />
         </div>
-
-        {/* 11x Brutalist Main Headline */}
-        <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-tighter uppercase text-white leading-[0.88] max-w-6xl mb-8">
-          Code at the <br className="hidden sm:inline" />
-          <span className="text-metallic">Speed of Speech.</span>
-        </h1>
 
         {/* Subtitle */}
-        <p className="text-lg sm:text-xl md:text-2xl text-zinc-400 max-w-3xl leading-relaxed font-normal mb-10">
-          The first hands-free voice AI for VS Code. Powered by real-time{" "}
-          <span className="text-zinc-200 font-medium">Silero VAD</span>, autonomous workspace context crawling, unified{" "}
-          <span className="text-zinc-200 font-medium">syntax diffs</span>, and an automatic self-healing{" "}
-          <span className="text-brand-lightBrown font-medium">pytest runner</span>.
-        </p>
+        <FadeContent delay={0.4} duration={0.8} blur={4}>
+          <p className="text-center text-lg sm:text-xl text-alma-teriyaki/60 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Speak naturally, code effortlessly. Real-time voice detection, autonomous
+            context crawling, inline diffs, and self-healing test repair — all
+            hands-free.
+          </p>
+        </FadeContent>
 
-        {/* Action CTAs */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-14">
-          <a
-            href="#install"
-            className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-brand-brown via-brand-accent to-brand-brown hover:brightness-110 text-white border border-brand-sand/30 shadow-xl shadow-brand-brown/20 flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5"
-          >
-            <Sparkles className="w-4 h-4 text-brand-sand" />
-            <span>Install Extension for Free</span>
-            <ArrowRight className="w-4 h-4 text-brand-sand" />
-          </a>
-
-          <a
-            href="#simulator"
-            className="w-full sm:w-auto px-8 py-4 rounded-xl font-medium text-sm bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 flex items-center justify-center gap-2.5 transition-all"
-          >
-            <Mic className="w-4 h-4 text-brand-beige" />
-            <span>Try Interactive Simulator</span>
-          </a>
-        </div>
-
-        {/* CLI Quick Copy Bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm text-xs font-mono text-zinc-400 mb-16 shadow-inner">
-          <span className="text-zinc-500">$</span>
-          <span className="text-zinc-200 select-all">code --install-extension speak2build</span>
-          <button
-            onClick={copyCommand}
-            className="ml-2 px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
-          >
-            {copied ? "Copied ✓" : "Copy"}
-          </button>
-        </div>
-
-        {/* 4 Feature Badge Metrics Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl pt-8 border-t border-zinc-800/80">
-          <div className="flex flex-col items-center sm:items-start p-4 rounded-lg bg-zinc-950/50 border border-zinc-800/50">
-            <div className="flex items-center gap-2 text-brand-beige mb-1 font-mono text-xs uppercase tracking-wider">
-              <Zap className="w-3.5 h-3.5" />
-              <span>Low Latency</span>
-            </div>
-            <span className="text-2xl font-bold text-white tracking-tight">48ms VAD</span>
-            <span className="text-xs text-zinc-500 mt-1">Real-time Silero voice gate</span>
+        {/* CTA Buttons */}
+        <FadeContent delay={0.6} duration={0.7}>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+            <button onClick={copyCommand} className="btn-alma text-base px-8 py-3.5">
+              {copied ? (
+                <>✓ Copied to clipboard</>
+              ) : (
+                <>
+                  Install for VS Code
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+            <a
+              href="https://github.com/speak2build"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-alma-teriyaki/60 hover:text-alma-teriyaki transition-colors flex items-center gap-1.5 px-5 py-3 rounded-pill border border-black/8 hover:border-black/15 bg-white/50"
+            >
+              View on GitHub
+              <ArrowRight size={14} />
+            </a>
           </div>
+        </FadeContent>
 
-          <div className="flex flex-col items-center sm:items-start p-4 rounded-lg bg-zinc-950/50 border border-zinc-800/50">
-            <div className="flex items-center gap-2 text-brand-sand mb-1 font-mono text-xs uppercase tracking-wider">
-              <Layers className="w-3.5 h-3.5" />
-              <span>Zero Friction</span>
+        {/* Floating UI Cards around a central "editor" mock */}
+        <FadeContent delay={0.8} duration={1}>
+          <div className="relative max-w-3xl mx-auto">
+            {/* Central Editor Mock */}
+            <div className="card-alma rounded-2xl overflow-hidden shadow-xl">
+              <div className="bg-alma-teriyaki/95 px-4 py-2.5 flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400/80" />
+                  <div className="w-3 h-3 rounded-full bg-green-400/80" />
+                </div>
+                <span className="text-xs text-white/50 font-mono ml-2">
+                  app.py — Speak2Build
+                </span>
+              </div>
+              <div className="bg-[#1e1e1e] p-5 font-mono text-sm leading-relaxed">
+                <div className="text-green-400/80 mb-1">
+                  # 🎙️ Voice command detected
+                </div>
+                <div className="text-white/40 mb-3">
+                  &quot;Add a REST endpoint for user authentication&quot;
+                </div>
+                <div className="text-blue-400">
+                  <span className="text-purple-400">from</span> flask{" "}
+                  <span className="text-purple-400">import</span> Flask, request, jsonify
+                </div>
+                <div className="text-blue-400 mt-1">
+                  <span className="text-purple-400">from</span> auth{" "}
+                  <span className="text-purple-400">import</span> verify_token
+                </div>
+                <div className="mt-3">
+                  <span className="text-blue-400">@app</span>
+                  <span className="text-yellow-300">.route</span>
+                  <span className="text-white/80">(</span>
+                  <span className="text-green-300">&apos;/api/auth&apos;</span>
+                  <span className="text-white/80">, methods=[</span>
+                  <span className="text-green-300">&apos;POST&apos;</span>
+                  <span className="text-white/80">])</span>
+                </div>
+                <div>
+                  <span className="text-purple-400">def</span>{" "}
+                  <span className="text-yellow-300">authenticate</span>
+                  <span className="text-white/80">():</span>
+                </div>
+                <div className="text-white/40 ml-8">
+                  token = request.json.get(<span className="text-green-300">&apos;token&apos;</span>)
+                </div>
+                <div className="text-white/40 ml-8">
+                  <span className="text-purple-400">return</span> jsonify(verify_token(token))
+                </div>
+              </div>
             </div>
-            <span className="text-2xl font-bold text-white tracking-tight">0 Q&A Prompts</span>
-            <span className="text-xs text-zinc-500 mt-1">Crawls code autonomously</span>
-          </div>
 
-          <div className="flex flex-col items-center sm:items-start p-4 rounded-lg bg-zinc-950/50 border border-zinc-800/50">
-            <div className="flex items-center gap-2 text-emerald-400 mb-1 font-mono text-xs uppercase tracking-wider">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Self-Healing</span>
+            {/* Floating Card: Voice Active */}
+            <div className="absolute -left-4 lg:-left-16 top-8 animate-float">
+              <div className="card-alma rounded-2xl px-4 py-3 flex items-center gap-3 shadow-lg">
+                <div className="w-8 h-8 rounded-full bg-alma-kiwi/20 flex items-center justify-center">
+                  <Mic size={14} className="text-alma-collard" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-alma-teriyaki">
+                    Listening...
+                  </div>
+                  <div className="text-[10px] text-alma-muted">Silero VAD active</div>
+                </div>
+                <div className="w-2 h-2 rounded-full bg-alma-kiwi animate-pulse" />
+              </div>
             </div>
-            <span className="text-2xl font-bold text-white tracking-tight">Auto-Repair</span>
-            <span className="text-xs text-zinc-500 mt-1">Runs pytest & heals failures</span>
-          </div>
 
-          <div className="flex flex-col items-center sm:items-start p-4 rounded-lg bg-zinc-950/50 border border-zinc-800/50">
-            <div className="flex items-center gap-2 text-brand-lightBrown mb-1 font-mono text-xs uppercase tracking-wider">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Privacy First</span>
+            {/* Floating Card: Context Crawled */}
+            <div className="absolute -right-4 lg:-right-16 top-20 animate-float-delayed">
+              <div className="card-alma rounded-2xl px-4 py-3 shadow-lg">
+                <div className="text-xs font-semibold text-alma-teriyaki mb-1">
+                  Context Crawled
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {["app.py", "auth.py", "models.py"].map((f) => (
+                    <span key={f} className="text-[10px] px-2 py-0.5 bg-alma-aioli rounded-full text-alma-teriyaki/70 font-mono">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-            <span className="text-2xl font-bold text-white tracking-tight">BYO LLM</span>
-            <span className="text-xs text-zinc-500 mt-1">OpenAI, Groq, or Local Ollama</span>
+
+            {/* Floating Card: Tests Passing */}
+            <div className="absolute -left-2 lg:-left-12 bottom-4 animate-float-slow">
+              <div className="card-alma rounded-2xl px-4 py-3 flex items-center gap-2 shadow-lg">
+                <CheckCircle2 size={16} className="text-alma-kiwi" />
+                <div>
+                  <div className="text-xs font-semibold text-alma-collard">
+                    Tests Passing
+                  </div>
+                  <div className="text-[10px] text-alma-muted">12/12 passed</div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </FadeContent>
+
+        {/* Stats Strip */}
+        <FadeContent delay={1} duration={0.8}>
+          <div className="flex flex-wrap justify-center gap-8 sm:gap-16 mt-16 mb-8">
+            {STATS.map((stat) => (
+              <div key={stat.label} className="text-center">
+                <div className="font-display text-3xl sm:text-4xl font-semibold text-alma-teriyaki">
+                  <CountUp
+                    to={stat.value}
+                    prefix={stat.prefix}
+                    suffix={stat.suffix}
+                    decimals={stat.decimals || 0}
+                    duration={2.5}
+                    separator=","
+                  />
+                </div>
+                <div className="text-sm text-alma-muted mt-1">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </FadeContent>
+
+        {/* Trust Badges */}
+        <FadeContent delay={1.2} duration={0.6}>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+            {TRUST_BADGES.map((badge) => (
+              <div
+                key={badge.text}
+                className="flex items-center gap-1.5 text-sm text-alma-teriyaki/50"
+              >
+                <badge.icon size={14} />
+                {badge.text}
+              </div>
+            ))}
+          </div>
+        </FadeContent>
       </div>
     </section>
   );
 }
-

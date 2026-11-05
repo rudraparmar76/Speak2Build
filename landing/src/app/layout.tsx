@@ -16,7 +16,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Speak2Build — Voice-First AI Pair Programmer for VS Code",
   description:
-    "Transform the way you code with hands-free AI pair programming. Real-time Silero VAD, autonomous workspace context crawling, inline unified diffs, and self-healing test repair.",
+    "The voice-first AI pair programmer that fits in your editor. Real-time Silero VAD, autonomous workspace context crawling, inline unified diffs, and self-healing test repair.",
   keywords: [
     "Speak2Build",
     "voice coding",
@@ -41,9 +41,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth">
+    <html lang="en" className="scroll-smooth">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans bg-black text-zinc-100 antialiased selection:bg-brand-accent selection:text-white min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans bg-alma-yogurt text-alma-teriyaki antialiased selection:bg-alma-kiwi/30 min-h-screen`}
       >
         {children}
       </body>

@@ -1,112 +1,95 @@
 "use client";
 
-import { ArrowRight, Shield, CheckCircle } from "lucide-react";
+import { Mic, Brain, FileCode, TestTube, CheckCircle2 } from "lucide-react";
+import FadeContent from "./reactbits/FadeContent";
 
-const PIPELINE_STEPS = [
+const STEPS = [
   {
-    step: "01",
-    name: "Voice Capture & VAD",
-    tech: "Silero VAD v5 • 48ms",
-    desc: "Continuous neural voice activity detection listens for speech boundaries and cancels background room noise.",
+    icon: Mic,
+    number: "01",
+    title: "Speak",
+    description: "Just talk. Silero VAD captures your voice in real-time and transcribes it via Whisper.",
   },
   {
-    step: "02",
-    name: "Streaming Transcription",
-    tech: "Whisper STT • Editable Draft",
-    desc: "Converts audio to text and populates the editable textarea, letting developers edit typos before submission.",
+    icon: Brain,
+    number: "02",
+    title: "Understand",
+    description: "The context crawler reads your workspace — files, structure, dependencies — and feeds it to the LLM.",
   },
   {
-    step: "03",
-    name: "Autonomous Context Crawler",
-    tech: "AST Parser • Zero Clarifications",
-    desc: "Crawls workspace files, discovers existing frameworks (FastAPI, React), and deduces schemas autonomously.",
+    icon: FileCode,
+    number: "03",
+    title: "Generate",
+    description: "The LLM generates code as a unified diff. You see exactly what will change before accepting.",
   },
   {
-    step: "04",
-    name: "Unified Diff Generation",
-    tech: "Syntax Highlighter • AST Safe",
-    desc: "Generates line-level unified diffs. Validates syntax, imports, and git safety before presenting to user.",
+    icon: TestTube,
+    number: "04",
+    title: "Validate",
+    description: "Tests run automatically after code is applied. If something breaks, the self-healer kicks in.",
   },
   {
-    step: "05",
-    name: "Validation & Test Healer",
-    tech: "Pytest / Jest Runner • Auto-Repair",
-    desc: "Executes test runner. If errors occur, chronological auto-repair turns craft and verify fixes automatically.",
+    icon: CheckCircle2,
+    number: "05",
+    title: "Ship",
+    description: "Accept the changes with one click. Your code is updated, tested, and ready to commit.",
   },
 ];
 
 export function ArchitectureSection() {
   return (
-    <section id="architecture" className="py-24 md:py-32 bg-zinc-950 border-t border-zinc-900 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 border-b border-zinc-800/80 pb-8">
-          <div>
-            <div className="flex items-center gap-2 text-brand-beige font-mono text-xs uppercase tracking-widest mb-3">
-              <span>Under the Hood</span>
-              <span>•</span>
-              <span>Autonomous Pipeline</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold uppercase tracking-tight text-white">
-              End-to-End Pipeline Architecture.
+    <section id="architecture" className="py-section bg-alma-aioli relative">
+      <div className="max-w-content mx-auto px-section-mobile lg:px-section">
+        <FadeContent duration={0.7}>
+          <div className="text-center mb-16">
+            <span className="tag-pill mb-4 inline-block">The Pipeline</span>
+            <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium leading-[0.96] tracking-tight mt-4">
+              From voice to code
+              <br />
+              <em className="text-alma-collard">in five steps.</em>
             </h2>
           </div>
-          <p className="text-zinc-400 text-sm md:text-base max-w-md mt-4 md:mt-0 font-normal">
-            A deterministic, multi-stage state machine connecting local voice inference with your workspace code and test suites.
-          </p>
-        </div>
+        </FadeContent>
 
-        {/* Steps Flow Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {PIPELINE_STEPS.map((s, idx) => (
-            <div
-              key={idx}
-              className="relative p-6 rounded-xl bg-black border border-zinc-800/80 hover:border-brand-brown transition-all flex flex-col justify-between"
+        <div className="max-w-3xl mx-auto">
+          {STEPS.map((step, i) => (
+            <FadeContent
+              key={step.number}
+              delay={i * 0.12}
+              duration={0.6}
+              direction="left"
+              distance={20}
             >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="font-mono text-xs font-bold text-brand-sand px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
-                    Step {s.step}
-                  </span>
-                  {idx < PIPELINE_STEPS.length - 1 && (
-                    <ArrowRight className="hidden md:inline w-4 h-4 text-zinc-600" />
+              <div className="flex gap-6 mb-10 last:mb-0 group">
+                {/* Timeline */}
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-2xl bg-alma-surface border border-black/5 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+                    <step.icon size={20} className="text-alma-collard" />
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div className="w-px h-full min-h-[40px] bg-gradient-to-b from-black/10 to-transparent mt-2" />
                   )}
                 </div>
-                <h3 className="text-sm font-bold text-white mb-1 tracking-tight">{s.name}</h3>
-                <span className="text-[11px] font-mono text-brand-beige block mb-3">{s.tech}</span>
-                <p className="text-xs text-zinc-400 leading-relaxed font-normal">{s.desc}</p>
+
+                {/* Content */}
+                <div className="pt-1 pb-8">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs font-mono text-alma-muted">
+                      {step.number}
+                    </span>
+                    <h3 className="text-lg font-semibold text-alma-teriyaki">
+                      {step.title}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-alma-teriyaki/50 leading-relaxed max-w-md">
+                    {step.description}
+                  </p>
+                </div>
               </div>
-            </div>
+            </FadeContent>
           ))}
-        </div>
-
-        {/* Architecture Specs Bar */}
-        <div className="mt-12 p-6 rounded-xl bg-black border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">100% Local Sandboxing & Safety</h4>
-              <p className="text-xs text-zinc-400">
-                Diffs are dry-run validated against your Git index before application. No destructive file overwrites.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 font-mono text-xs text-zinc-400">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle className="w-3.5 h-3.5 text-brand-beige" />
-              157 Pytest Tests Passing
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle className="w-3.5 h-3.5 text-brand-beige" />
-              Zero Telemetry / Full Privacy
-            </span>
-          </div>
         </div>
       </div>
     </section>
   );
 }
-

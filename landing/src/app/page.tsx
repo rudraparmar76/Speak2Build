@@ -11,7 +11,7 @@ import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-black text-white selection:bg-brand-accent selection:text-white">
+    <main className="min-h-screen bg-alma-yogurt text-alma-teriyaki selection:bg-alma-kiwi/30 selection:text-alma-teriyaki">
       <Navbar />
       <Hero />
       <MarqueeTicker />

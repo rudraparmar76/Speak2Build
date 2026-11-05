@@ -2,103 +2,117 @@ import { Mic, ArrowUpRight } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="bg-zinc-950 border-t border-zinc-900 py-16 text-xs text-zinc-500 font-mono">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="bg-alma-yogurt border-t border-black/5 py-16 text-xs text-alma-teriyaki/60">
+      <div className="max-w-content mx-auto px-section-mobile lg:px-section">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           {/* Brand Col */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-brand-brown/40 border border-brand-brown/60 flex items-center justify-center">
-                <Mic className="w-3.5 h-3.5 text-brand-beige" />
+              <div className="w-7 h-7 rounded-full bg-alma-collard flex items-center justify-center">
+                <Mic className="w-3.5 h-3.5 text-alma-kiwi" />
               </div>
-              <span className="font-bold text-sm text-white tracking-tight">Speak2Build</span>
+              <span className="font-display font-semibold text-base text-alma-teriyaki tracking-tight">
+                Speak2Build
+              </span>
             </div>
-            <p className="text-zinc-400 font-sans text-xs leading-relaxed">
-              Hands-free voice-first AI pair programmer for VS Code. Minimalist brutalist developer tooling.
+            <p className="text-alma-teriyaki/60 text-xs leading-relaxed max-w-xs">
+              Hands-free voice-first AI pair programmer for VS Code. Organic,
+              thoughtful developer tooling powered by local VAD and multi-LLM orchestration.
             </p>
           </div>
 
-          {/* Links: Features */}
+          {/* Links: Capabilities */}
           <div>
-            <h4 className="text-zinc-300 font-bold uppercase tracking-wider mb-3">Capabilities</h4>
-            <ul className="space-y-2 text-zinc-400">
+            <h4 className="text-alma-teriyaki font-semibold uppercase tracking-wider text-[11px] mb-3">
+              Capabilities
+            </h4>
+            <ul className="space-y-2 text-alma-teriyaki/70">
               <li>
-                <a href="#simulator" className="hover:text-white transition-colors">
+                <a href="#simulator" className="hover:text-alma-collard transition-colors">
                   Hands-Free Silero VAD
                 </a>
               </li>
               <li>
-                <a href="#simulator" className="hover:text-white transition-colors">
-                  Editable Voice Drafts
+                <a href="#simulator" className="hover:text-alma-collard transition-colors">
+                  Editable Voice Transcripts
                 </a>
               </li>
               <li>
-                <a href="#workers" className="hover:text-white transition-colors">
+                <a href="#features" className="hover:text-alma-collard transition-colors">
                   Autonomous Context Crawling
                 </a>
               </li>
               <li>
-                <a href="#workers" className="hover:text-white transition-colors">
+                <a href="#simulator" className="hover:text-alma-collard transition-colors">
                   Pytest Self-Healing Loop
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Links: Documentation */}
+          {/* Links: Resources */}
           <div>
-            <h4 className="text-zinc-300 font-bold uppercase tracking-wider mb-3">Resources</h4>
-            <ul className="space-y-2 text-zinc-400">
+            <h4 className="text-alma-teriyaki font-semibold uppercase tracking-wider text-[11px] mb-3">
+              Resources
+            </h4>
+            <ul className="space-y-2 text-alma-teriyaki/70">
               <li>
-                <a href="#install" className="hover:text-white transition-colors">
+                <a href="#install" className="hover:text-alma-collard transition-colors">
                   VS Code Marketplace
                 </a>
               </li>
               <li>
-                <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+                <a
+                  href="https://github.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-alma-collard transition-colors flex items-center gap-1"
+                >
                   GitHub Repository <ArrowUpRight className="w-3 h-3" />
                 </a>
               </li>
               <li>
-                <a href="#architecture" className="hover:text-white transition-colors">
-                  Architecture & Safety
+                <a href="#architecture" className="hover:text-alma-collard transition-colors">
+                  Architecture Overview
                 </a>
               </li>
               <li>
-                <a href="#comparison" className="hover:text-white transition-colors">
-                  Copilot Comparison
+                <a href="#compare" className="hover:text-alma-collard transition-colors">
+                  Feature Comparison
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Stack & System Specs */}
-          <div>
-            <h4 className="text-zinc-300 font-bold uppercase tracking-wider mb-3">Runtime Specs</h4>
-            <ul className="space-y-1.5 text-zinc-500 text-[11px]">
-              <li>VAD Engine: Silero v5 ONNX</li>
-              <li>Speech Engine: Whisper STT</li>
-              <li>Synthesis: Fast Unified Diff</li>
-              <li>Host Platform: VS Code API &amp; React</li>
-              <li>Backend: FastAPI &amp; Pytest (157 tests passed)</li>
-            </ul>
+          {/* Status & Credits */}
+          <div className="space-y-3">
+            <h4 className="text-alma-teriyaki font-semibold uppercase tracking-wider text-[11px] mb-3">
+              System Status
+            </h4>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-alma-kiwi animate-pulse" />
+              <span className="text-xs font-mono text-alma-teriyaki/80">
+                Silero VAD v5 Engine Ready
+              </span>
+            </div>
+            <div className="text-[11px] text-alma-muted pt-2 leading-relaxed">
+              Compatible with VS Code 1.85+, Python 3.10+, and local Ollama / OpenRouter / Groq / OpenAI.
+            </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-[11px] text-zinc-600">
-            © {new Date().getFullYear()} Speak2Build. Inspired by 11x Design System. MIT License.
-          </p>
-
-          <div className="flex items-center gap-6 text-[11px] text-zinc-500">
-            <span>Windows • macOS • Linux</span>
+        <div className="pt-8 border-t border-black/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-alma-muted">
+          <div>© {new Date().getFullYear()} Speak2Build. Open-source software released under the MIT License.</div>
+          <div className="flex items-center gap-4">
+            <a href="#features" className="hover:text-alma-teriyaki transition-colors">Privacy</a>
             <span>•</span>
-            <span>Open Source</span>
+            <a href="#install" className="hover:text-alma-teriyaki transition-colors">Install</a>
+            <span>•</span>
+            <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-alma-teriyaki transition-colors">GitHub</a>
           </div>
         </div>
       </div>
     </footer>
   );
 }
-

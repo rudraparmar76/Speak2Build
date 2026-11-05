@@ -1,76 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #000000;
-  --foreground: #f4f4f5;
-  --brand-brown: #84533b;
-  --brand-accent: #643414;
-  --brand-beige: #cca57c;
-  --brand-sand: #cec0b8;
-}
-
-html {
-  color-scheme: dark;
-  scroll-behavior: smooth;
-  background-color: #000000;
+  --alma-color-kiwi: #aadf49;
+  --alma-color-collard: #3c5627;
+  --alma-color-aioli: #f7f5ed;
+  --alma-color-teriyaki: #33140c;
+  --alma-color-yogurt: #fffdf5;
+  --alma-color-surface: #fffefc;
+  --alma-color-muted: #a1a1a1;
+  --alma-color-teal: #146c84;
+  --alma-button-gradient: linear-gradient(to bottom, #45632d, #2b3d1c);
+  --alma-button-gradient-hover: linear-gradient(to bottom, #4b6b31, #30451f);
+  --alma-button-shadow: 0 15px 14px -10px #00000026, inset 0 0 0 1px #0003;
+  --alma-button-shadow-hover: 0 10px 18px -10px #0000003d, inset 0 0 0 1px #0003;
+  --content-max-width: 1200px;
+  --content-padding: 80px;
+  --content-padding-mobile: 40px;
 }
 
 body {
-  color: var(--foreground);
-  background: #000000;
-  overflow-x: hidden;
-  selection-background-color: #84533b;
-  selection-color: #ffffff;
+  background: var(--alma-color-yogurt);
+  color: var(--alma-color-teriyaki);
+  font-family: var(--font-geist-sans), 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-::selection {
-  background: #643414;
-  color: #ffffff;
+.font-display {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
 }
 
-/* Custom subtle scrollbars */
+/* Alma-style button */
+.btn-alma {
+  background: var(--alma-button-gradient);
+  box-shadow: var(--alma-button-shadow);
+  color: white;
+  border-radius: 50px;
+  padding: 12px 28px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-alma:hover {
+  background: var(--alma-button-gradient-hover);
+  box-shadow: var(--alma-button-shadow-hover);
+  transform: translateY(-1px);
+}
+
+/* Soft gradient hero background */
+.hero-gradient {
+  background: linear-gradient(
+    180deg,
+    #f0eee4 0%,
+    #f7f5ed 30%,
+    #fffdf5 100%
+  );
+}
+
+/* Floating card animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(0.5deg); }
+  50% { transform: translateY(-4px) rotate(-0.3deg); }
+  75% { transform: translateY(-10px) rotate(0.2deg); }
+}
+
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(-0.4deg); }
+  66% { transform: translateY(-12px) rotate(0.3deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 9s ease-in-out infinite;
+}
+
+/* Subtle grain texture overlay */
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Soft section divider */
+.section-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    #d4d0c4 20%,
+    #d4d0c4 80%,
+    transparent 100%
+  );
+}
+
+/* Card styles */
+.card-alma {
+  background: var(--alma-color-surface);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.card-alma:hover {
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Earthy tag pill */
+.tag-pill {
+  background: rgba(170, 223, 73, 0.15);
+  color: var(--alma-color-collard);
+  border-radius: 50px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #08080a;
+  background: var(--alma-color-aioli);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #c4bfb0;
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
-}
-
-/* Brutalist grid backgrounds */
-.bg-grid-pattern {
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
-
-.bg-dot-pattern {
-  background-size: 24px 24px;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-}
-
-/* Gradient text accents */
-.text-metallic {
-  background: linear-gradient(135deg, #ffffff 0%, #d6b4a3 50%, #84533b 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.text-gold-gradient {
-  background: linear-gradient(135deg, #fef3c7 0%, #cca57c 50%, #84533b 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Selection */
+::selection {
+  background: rgba(170, 223, 73, 0.3);
+  color: var(--alma-color-teriyaki);
 }

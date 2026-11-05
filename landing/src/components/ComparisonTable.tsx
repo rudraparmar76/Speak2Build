@@ -1,143 +1,110 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import FadeContent from "./reactbits/FadeContent";
 
-const COMPARISONS = [
-  {
-    feature: "Hands-Free Always-Listening (Silero VAD)",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "Live Voice Barge-In (Interrupt AI Speaking)",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "Editable Speech Transcription before Generation",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "Autonomous Workspace Context Crawling (Zero Q&A)",
-    speak2build: true,
-    copilot: "partial",
-    chatbots: false,
-  },
-  {
-    feature: "Inline Syntax Diffs with Line-by-Line Review",
-    speak2build: true,
-    copilot: "partial",
-    chatbots: false,
-  },
-  {
-    feature: "Integrated Pytest Runner inside Chat",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "One-Click / Spoken Auto-Repair for Failing Tests",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "Bring Your Own Key (OpenAI, Groq, Ollama Offline)",
-    speak2build: true,
-    copilot: false,
-    chatbots: false,
-  },
-  {
-    feature: "Zero Copy-Pasting Friction",
-    speak2build: true,
-    copilot: "partial",
-    chatbots: false,
-  },
+const FEATURES_LIST = [
+  { feature: "Voice-first interaction", speak2build: true, copilot: false, chatbots: false },
+  { feature: "Real-time VAD (no wake word)", speak2build: true, copilot: false, chatbots: false },
+  { feature: "Autonomous context crawling", speak2build: true, copilot: "partial", chatbots: false },
+  { feature: "Inline unified diffs", speak2build: true, copilot: true, chatbots: false },
+  { feature: "Auto test runner", speak2build: true, copilot: false, chatbots: false },
+  { feature: "Self-healing test repair", speak2build: true, copilot: false, chatbots: false },
+  { feature: "Multi-LLM support", speak2build: true, copilot: false, chatbots: "partial" },
+  { feature: "Local / self-hosted LLMs", speak2build: true, copilot: false, chatbots: "partial" },
+  { feature: "TTS feedback", speak2build: true, copilot: false, chatbots: false },
+  { feature: "Open source", speak2build: true, copilot: false, chatbots: "partial" },
 ];
+
+function CellValue({ value }: { value: boolean | string }) {
+  if (value === true) {
+    return (
+      <div className="w-6 h-6 rounded-full bg-alma-kiwi/20 flex items-center justify-center">
+        <Check size={14} className="text-alma-collard" />
+      </div>
+    );
+  }
+  if (value === "partial") {
+    return (
+      <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center">
+        <span className="text-yellow-600 text-xs font-bold">~</span>
+      </div>
+    );
+  }
+  return (
+    <div className="w-6 h-6 rounded-full bg-black/5 flex items-center justify-center">
+      <X size={12} className="text-alma-muted" />
+    </div>
+  );
+}
 
 export function ComparisonTable() {
   return (
-    <section id="comparison" className="py-24 md:py-32 bg-black relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 border-b border-zinc-800/80 pb-8">
-          <div>
-            <div className="flex items-center gap-2 text-brand-beige font-mono text-xs uppercase tracking-widest mb-3">
-              <span>Why Speak2Build</span>
-              <span>•</span>
-              <span>Direct Comparison</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold uppercase tracking-tight text-white">
-              The Evolution of Pair Programming.
+    <section id="compare" className="py-section bg-alma-yogurt relative">
+      <div className="max-w-content mx-auto px-section-mobile lg:px-section">
+        <FadeContent duration={0.7}>
+          <div className="text-center mb-12">
+            <span className="tag-pill mb-4 inline-block">Compare</span>
+            <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium leading-[0.96] tracking-tight mt-4">
+              Not just another
+              <br />
+              <em className="text-alma-collard">code assistant.</em>
             </h2>
           </div>
-          <p className="text-zinc-400 text-sm md:text-base max-w-md mt-4 md:mt-0 font-normal">
-            Traditional tools force you to type, read walls of code, and manually run tests. Speak2Build automates the full engineering feedback loop.
-          </p>
-        </div>
+        </FadeContent>
 
-        {/* Table Container */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/60 font-mono text-xs text-zinc-400">
-                  <th className="py-4 px-6 font-semibold uppercase tracking-wider text-zinc-300">
-                    Capability
-                  </th>
-                  <th className="py-4 px-6 font-semibold uppercase tracking-wider text-brand-beige bg-brand-brown/10 border-x border-brand-brown/30">
-                    Speak2Build 2.0
-                  </th>
-                  <th className="py-4 px-6 font-semibold uppercase tracking-wider text-zinc-400">
-                    Standard Copilots
-                  </th>
-                  <th className="py-4 px-6 font-semibold uppercase tracking-wider text-zinc-400">
-                    Web Chatbots (GPT/Claude)
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/60 text-xs">
-                {COMPARISONS.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-zinc-900/40 transition-colors">
-                    <td className="py-3.5 px-6 font-medium text-zinc-200">
-                      {row.feature}
-                    </td>
-
-                    {/* Speak2Build */}
-                    <td className="py-3.5 px-6 bg-brand-brown/5 border-x border-brand-brown/20">
-                      {row.speak2build === true && (
-                        <div className="flex items-center gap-1.5 text-emerald-400 font-semibold font-mono">
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span>Native</span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Copilot */}
-                    <td className="py-3.5 px-6 text-zinc-400">
-                      {row.copilot === true && <Check className="w-4 h-4 text-emerald-400" />}
-                      {row.copilot === false && <X className="w-4 h-4 text-zinc-600" />}
-                      {row.copilot === "partial" && (
-                        <span className="font-mono text-zinc-500">Partial / Clicky</span>
-                      )}
-                    </td>
-
-                    {/* Web Chatbots */}
-                    <td className="py-3.5 px-6 text-zinc-400">
-                      {row.chatbots === true && <Check className="w-4 h-4 text-emerald-400" />}
-                      {row.chatbots === false && <X className="w-4 h-4 text-zinc-600" />}
-                    </td>
+        <FadeContent delay={0.2} duration={0.7}>
+          <div className="card-alma overflow-hidden max-w-3xl mx-auto">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-black/5">
+                    <th className="text-left p-4 text-alma-teriyaki/40 font-medium">
+                      Feature
+                    </th>
+                    <th className="text-center p-4 font-semibold text-alma-collard">
+                      Speak2Build
+                    </th>
+                    <th className="text-center p-4 text-alma-teriyaki/40 font-medium">
+                      Copilot
+                    </th>
+                    <th className="text-center p-4 text-alma-teriyaki/40 font-medium">
+                      AI Chatbots
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {FEATURES_LIST.map((row, i) => (
+                    <tr
+                      key={row.feature}
+                      className={`border-b border-black/3 ${
+                        i % 2 === 0 ? "bg-alma-aioli/30" : ""
+                      }`}
+                    >
+                      <td className="p-4 text-alma-teriyaki/70">{row.feature}</td>
+                      <td className="p-4">
+                        <div className="flex justify-center">
+                          <CellValue value={row.speak2build} />
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex justify-center">
+                          <CellValue value={row.copilot} />
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex justify-center">
+                          <CellValue value={row.chatbots} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </FadeContent>
       </div>
     </section>
   );
 }
-

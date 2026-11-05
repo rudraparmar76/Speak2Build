@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Terminal, ArrowRight } from "lucide-react";
+import { Sparkles, Terminal, ArrowRight, ShieldCheck, Cpu, Code2 } from "lucide-react";
+import FadeContent from "./reactbits/FadeContent";
 
 export function BottomCta() {
   const [copied, setCopied] = useState(false);
@@ -13,65 +14,67 @@ export function BottomCta() {
   };
 
   return (
-    <section id="install" className="py-24 md:py-36 bg-black border-t border-zinc-900 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute inset-0 bg-radial-gradient from-brand-accent/20 to-transparent blur-3xl opacity-30 pointer-events-none" />
+    <section id="install" className="py-section hero-gradient relative overflow-hidden grain border-t border-black/5">
+      <div className="max-w-content mx-auto px-section-mobile lg:px-section text-center relative z-10">
+        <FadeContent duration={0.6}>
+          <div className="flex justify-center mb-6">
+            <span className="tag-pill">Get Started Today</span>
+          </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-        <span className="text-xs font-mono uppercase tracking-widest text-brand-beige mb-6 inline-block">
-          Install Speak2Build for Visual Studio Code
-        </span>
+          {/* Editorial Serif Headline */}
+          <h2 className="font-display text-4xl sm:text-6xl lg:text-7xl font-medium tracking-tight text-alma-teriyaki leading-[1.05] mb-6 max-w-3xl mx-auto">
+            Code naturally,
+            <br />
+            <em className="text-alma-collard">build effortlessly.</em>
+          </h2>
 
-        {/* Monumental Headline */}
-        <h2 className="text-5xl sm:text-7xl md:text-8xl font-black uppercase tracking-tighter text-white leading-none mb-8">
-          Stop Typing. <br />
-          <span className="text-metallic">Start Building.</span>
-        </h2>
+          <p className="text-base sm:text-lg text-alma-teriyaki/60 max-w-xl mx-auto mb-10 leading-relaxed">
+            Available directly inside VS Code on Windows, macOS, and Linux.
+            Bring your own API keys or run completely free with local Ollama models.
+          </p>
 
-        <p className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-          Available for VS Code on Windows, macOS, and Linux. Bring your own keys or connect to local Ollama.
-          Always free and open-source.
-        </p>
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+            <a
+              href="https://marketplace.visualstudio.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-alma text-base px-8 py-3.5 w-full sm:w-auto justify-center"
+            >
+              <Sparkles className="w-4 h-4 text-alma-kiwi" />
+              <span>Install for VS Code</span>
+              <ArrowRight className="w-4 h-4" />
+            </a>
 
-        {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-          <a
-            href="https://marketplace.visualstudio.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-brand-brown via-brand-accent to-brand-brown hover:brightness-110 text-white border border-brand-sand/30 shadow-xl shadow-brand-brown/25 flex items-center justify-center gap-3 transition-all"
-          >
-            <Sparkles className="w-4 h-4 text-brand-sand" />
-            <span>Install from VS Code Marketplace</span>
-            <ArrowRight className="w-4 h-4 text-brand-sand" />
-          </a>
+            <button
+              onClick={copyCommand}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-pill font-mono text-xs bg-alma-surface hover:bg-white text-alma-teriyaki border border-black/10 shadow-sm flex items-center justify-center gap-3 transition-all"
+            >
+              <Terminal className="w-4 h-4 text-alma-collard" />
+              <span>code --install-extension speak2build</span>
+              <span className="px-2 py-0.5 rounded-full bg-alma-aioli text-[10px] text-alma-teriyaki/70 font-semibold">
+                {copied ? "Copied ✓" : "Copy"}
+              </span>
+            </button>
+          </div>
 
-          <button
-            onClick={copyCommand}
-            className="w-full sm:w-auto px-6 py-4 rounded-xl font-mono text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 flex items-center justify-center gap-3 transition-all"
-          >
-            <Terminal className="w-4 h-4 text-brand-beige" />
-            <span>code --install-extension speak2build</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400">
-              {copied ? "Copied ✓" : "Copy"}
+          {/* Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-xs text-alma-teriyaki/50">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-alma-collard" />
+              100% Local Voice VAD
             </span>
-          </button>
-        </div>
-
-        {/* Shortcuts Pill */}
-        <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400">
-          <span>Keyboard Trigger:</span>
-          <kbd className="px-2 py-0.5 rounded bg-zinc-900 text-brand-beige border border-zinc-700">
-            Ctrl + Alt + Space
-          </kbd>
-          <span>•</span>
-          <span>Hands-Free Mic:</span>
-          <kbd className="px-2 py-0.5 rounded bg-zinc-900 text-brand-beige border border-zinc-700">
-            Silero VAD
-          </kbd>
-        </div>
+            <span className="flex items-center gap-1.5">
+              <Cpu className="w-4 h-4 text-alma-collard" />
+              Zero Telemetry / Key Privacy
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Code2 className="w-4 h-4 text-alma-collard" />
+              Open Source MIT
+            </span>
+          </div>
+        </FadeContent>
       </div>
     </section>
   );
 }
-
