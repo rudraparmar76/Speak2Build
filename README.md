@@ -31,6 +31,12 @@ changes.
 
 ![Auto-repair output](snapshots/auto_repair_output.png)
 
+## Product walkthrough
+
+[Click the thumbnail to watch the product walkthrough]
+
+[![Watch the Speak2Build product walkthrough](https://img.youtube.com/vi/DnrfNbT5T9A/maxresdefault.jpg)](https://www.youtube.com/watch?v=DnrfNbT5T9A)
+
 ## Requirements
 
 - VS Code 1.96 or later
