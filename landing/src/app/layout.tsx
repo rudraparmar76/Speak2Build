@@ -28,6 +28,9 @@ export const metadata: Metadata = {
     "pytest auto repair",
   ],
   authors: [{ name: "Speak2Build Team" }],
+  icons: {
+    icon: "/logo.jpg",
+  },
 };
 
 export const viewport: Viewport = {

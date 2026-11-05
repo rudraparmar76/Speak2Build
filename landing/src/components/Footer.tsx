@@ -1,4 +1,5 @@
-import { Mic, ArrowUpRight } from "lucide-react";
+import Image from "next/image";
+import { ArrowUpRight } from "lucide-react";
 
 export function Footer() {
   return (
@@ -7,17 +8,21 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           {/* Brand Col */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-alma-collard flex items-center justify-center">
-                <Mic className="w-3.5 h-3.5 text-alma-kiwi" />
+            <div className="flex items-center gap-2.5">
+              <div className="relative w-8 h-8 rounded-full overflow-hidden bg-[#f7f5ee] border border-black/10 shrink-0 shadow-sm">
+                <Image
+                  src="/logo.jpg"
+                  alt="Speak2Build Logo"
+                  fill
+                  className="object-cover scale-[2.2] object-[50%_33%]"
+                />
               </div>
               <span className="font-display font-semibold text-base text-alma-teriyaki tracking-tight">
                 Speak2Build
               </span>
             </div>
             <p className="text-alma-teriyaki/60 text-xs leading-relaxed max-w-xs">
-              Hands-free voice-first AI pair programmer for VS Code. Organic,
-              thoughtful developer tooling powered by local VAD and multi-LLM orchestration.
+              Hands-free voice-first AI pair programmer for VS Code. Turn your ideas into code with local VAD and multi-LLM orchestration.
             </p>
           </div>
 

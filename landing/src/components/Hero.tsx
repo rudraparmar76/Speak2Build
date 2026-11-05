@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Mic, ArrowRight, CheckCircle2, ShieldCheck, Zap, Layers } from "lucide-react";
 import BlurText from "./reactbits/BlurText";
 import CountUp from "./reactbits/CountUp";
@@ -30,13 +31,22 @@ export function Hero() {
 
   return (
     <section className="hero-gradient relative overflow-hidden grain">
-      <div className="relative z-10 max-w-content mx-auto px-section-mobile lg:px-section pt-32 pb-16">
-        {/* Tag */}
+      <div className="relative z-10 max-w-content mx-auto px-section-mobile lg:px-section pt-28 pb-16">
+        {/* Official Brand Logo Badge */}
         <FadeContent delay={0} duration={0.6}>
-          <div className="flex justify-center mb-8">
-            <span className="tag-pill flex items-center gap-1.5">
+          <div className="flex flex-col items-center justify-center mb-6">
+            <div className="relative w-48 sm:w-60 h-28 sm:h-36 rounded-2xl overflow-hidden shadow-sm border border-black/5 bg-[#f7f5ee] p-2 hover:shadow-md transition-all">
+              <Image
+                src="/logo.jpg"
+                alt="Speak2Build - Turn your ideas into code"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+            <span className="tag-pill flex items-center gap-1.5 mt-4">
               <Mic size={12} />
-              VS Code Extension
+              Hands-Free VS Code Extension
             </span>
           </div>
         </FadeContent>

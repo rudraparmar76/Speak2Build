@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Mic, Menu, X } from "lucide-react";
+import Image from "next/image";
+import { Menu, X } from "lucide-react";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -36,15 +37,14 @@ export function Navbar() {
     >
       <div className="flex items-center justify-between">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-2 group">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-              scrolled ? "bg-alma-collard" : "bg-alma-kiwi/20"
-            }`}
-          >
-            <Mic
-              size={16}
-              className={scrolled ? "text-white" : "text-alma-kiwi"}
+        <a href="#" className="flex items-center gap-2.5 group">
+          <div className="relative w-8 h-8 rounded-full overflow-hidden bg-[#f7f5ee] border border-black/10 shrink-0 shadow-sm">
+            <Image
+              src="/logo.jpg"
+              alt="Speak2Build Logo"
+              fill
+              className="object-cover scale-[2.2] object-[50%_33%]"
+              priority
             />
           </div>
           <span
