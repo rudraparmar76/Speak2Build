@@ -37,10 +37,22 @@ const config: Config = {
         section: "80px",
         "section-mobile": "40px",
       },
+      keyframes: {
+        "marquee-ltr": {
+          "0%": { transform: "translateX(-50%)" },
+          "100%": { transform: "translateX(0%)" },
+        },
+        "marquee-rtl": {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+      },
       animation: {
         float: "float 6s ease-in-out infinite",
         "float-delayed": "float-delayed 7s ease-in-out infinite",
         "float-slow": "float 9s ease-in-out infinite",
+        "marquee-ltr": "marquee-ltr 35s linear infinite",
+        "marquee-rtl": "marquee-rtl 35s linear infinite",
       },
     },
   },
