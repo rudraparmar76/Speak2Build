@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #000000;
+  --foreground: #f4f4f5;
+  --brand-brown: #84533b;
+  --brand-accent: #643414;
+  --brand-beige: #cca57c;
+  --brand-sand: #cec0b8;
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  background-color: #000000;
+}
+
+body {
+  color: var(--foreground);
+  background: #000000;
+  overflow-x: hidden;
+  selection-background-color: #84533b;
+  selection-color: #ffffff;
+}
+
+::selection {
+  background: #643414;
+  color: #ffffff;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08080a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Brutalist grid backgrounds */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.bg-dot-pattern {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+}
+
+/* Gradient text accents */
+.text-metallic {
+  background: linear-gradient(135deg, #ffffff 0%, #d6b4a3 50%, #84533b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #fef3c7 0%, #cca57c 50%, #84533b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
