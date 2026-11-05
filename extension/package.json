@@ -2,7 +2,7 @@
   "name": "speak2build",
   "displayName": "Speak2Build",
   "description": "Speech-to-verified-code assistant for Python projects",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "RudraParmar",
   "private": true,
   "repository": {

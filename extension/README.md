@@ -15,17 +15,23 @@ Code.
 
 ## Screenshots
 
-![Speak2Build home screen](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/home_screen.png)
+![Speak2Build home screen](media/screenshots/home_screen.png)
 
-![LLM provider configuration](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/llm_config.png)
+![LLM provider configuration](media/screenshots/llm_config.png)
 
-![Voice-driven execution](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/voice_execution.png)
+![Voice-driven execution](media/screenshots/voice_execution.png)
 
-![Generated code diff](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/code_generation.png)
+![Generated code diff](media/screenshots/code_generation.png)
 
-![Test validation and auto-repair](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/test_code.png)
+![Test validation and auto-repair](media/screenshots/test_code.png)
 
-![Auto-repair output](https://raw.githubusercontent.com/rudraparmar76/Speak2Build/master/snapshots/auto_repair_output.png)
+![Auto-repair output](media/screenshots/auto_repair_output.png)
+
+## Product walkthrough
+
+[Click the thumbnail to watch the product walkthrough](https://www.youtube.com/watch?v=DnrfNbT5T9A)
+
+[![Watch the Speak2Build product walkthrough](https://img.youtube.com/vi/DnrfNbT5T9A/maxresdefault.jpg)](https://www.youtube.com/watch?v=DnrfNbT5T9A)
 
 ## Installation
 
