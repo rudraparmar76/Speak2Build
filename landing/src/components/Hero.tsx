@@ -99,7 +99,7 @@ export function Hero() {
               )}
             </button>
             <a
-              href="https://github.com"
+              href="https://github.com/rudraparmar76/Speak2Build"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm font-medium text-alma-teriyaki/70 hover:text-alma-teriyaki transition-colors flex items-center gap-1.5 px-5 py-3 rounded-pill border border-black/10 hover:border-black/20 bg-alma-surface shadow-sm"
