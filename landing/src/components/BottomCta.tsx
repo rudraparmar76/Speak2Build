@@ -8,7 +8,7 @@ export function BottomCta() {
   const [copied, setCopied] = useState(false);
 
   const copyCommand = () => {
-    navigator.clipboard.writeText("code --install-extension speak2build");
+    navigator.clipboard.writeText("code --install-extension RudraParmar.speak2build");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -36,7 +36,7 @@ export function BottomCta() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
             <a
-              href="https://marketplace.visualstudio.com"
+              href="https://marketplace.visualstudio.com/items?itemName=RudraParmar.speak2build"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-alma text-base px-8 py-3.5 w-full sm:w-auto justify-center"
@@ -51,7 +51,7 @@ export function BottomCta() {
               className="w-full sm:w-auto px-6 py-3.5 rounded-pill font-mono text-xs bg-alma-surface hover:bg-white text-alma-teriyaki border border-black/10 shadow-sm flex items-center justify-center gap-3 transition-all"
             >
               <Terminal className="w-4 h-4 text-alma-collard" />
-              <span>code --install-extension speak2build</span>
+              <span>code --install-extension RudraParmar.speak2build</span>
               <span className="px-2 py-0.5 rounded-full bg-alma-aioli text-[10px] text-alma-teriyaki/70 font-semibold">
                 {copied ? "Copied ✓" : "Copy"}
               </span>

@@ -22,7 +22,7 @@ export function Navbar() {
 	}, []);
 
 	const copyCommand = () => {
-		navigator.clipboard.writeText("code --install-extension speak2build");
+		navigator.clipboard.writeText("code --install-extension RudraParmar.speak2build");
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};
