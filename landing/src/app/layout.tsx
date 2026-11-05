@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Speak2Build Team" }],
   icons: {
-    icon: "/logo.jpg",
+    icon: "/icon.png",
   },
 };
 

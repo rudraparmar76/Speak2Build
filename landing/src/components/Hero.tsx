@@ -35,12 +35,13 @@ export function Hero() {
         {/* Official Brand Logo Badge */}
         <FadeContent delay={0} duration={0.6}>
           <div className="flex flex-col items-center justify-center mb-6">
-            <div className="relative w-48 sm:w-60 h-28 sm:h-36 rounded-2xl overflow-hidden shadow-sm border border-black/5 bg-[#f7f5ee] p-2 hover:shadow-md transition-all">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-md border-2 border-alma-collard/20 bg-alma-surface p-1 hover:scale-105 transition-transform">
               <Image
-                src="/logo.jpg"
+                src="/icon.png"
                 alt="Speak2Build - Turn your ideas into code"
-                fill
-                className="object-contain"
+                width={112}
+                height={112}
+                className="w-full h-full object-contain"
                 priority
               />
             </div>

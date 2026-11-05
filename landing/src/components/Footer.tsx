@@ -9,12 +9,13 @@ export function Footer() {
           {/* Brand Col */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="relative w-8 h-8 rounded-full overflow-hidden bg-[#f7f5ee] border border-black/10 shrink-0 shadow-sm">
+              <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-sm">
                 <Image
-                  src="/logo.jpg"
+                  src="/icon.png"
                   alt="Speak2Build Logo"
-                  fill
-                  className="object-cover scale-[2.2] object-[50%_33%]"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-contain"
                 />
               </div>
               <span className="font-display font-semibold text-base text-alma-teriyaki tracking-tight">
