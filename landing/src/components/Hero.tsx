@@ -46,7 +46,7 @@ export function Hero() {
         {/* Brand Emblem */}
         <FadeContent delay={0} duration={0.6}>
           <div className="flex flex-col items-center justify-center mb-6">
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shadow-md border-2 border-alma-collard/20 bg-alma-surface p-1 hover:scale-105 transition-transform">
+            {/* <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shadow-md border-2 border-alma-collard/20 bg-alma-surface p-1 hover:scale-105 transition-transform">
               <Image
                 src="/icon.png"
                 alt="Speak2Build - Turn your ideas into code"
@@ -55,7 +55,7 @@ export function Hero() {
                 className="w-full h-full object-contain"
                 priority
               />
-            </div>
+            </div> */}
             <span className="tag-pill flex items-center gap-1.5 mt-4">
               <Mic size={12} />
               Turn your ideas into code
