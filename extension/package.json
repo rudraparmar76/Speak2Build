@@ -3,7 +3,7 @@
   "displayName": "Speak2Build",
   "description": "Speech-to-verified-code assistant for Python projects",
   "version": "0.1.0",
-  "publisher": "speak2build",
+  "publisher": "RudraParmar",
   "private": true,
   "repository": {
     "type": "git",
