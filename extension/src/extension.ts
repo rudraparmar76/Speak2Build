@@ -1,12 +1,21 @@
 import * as vscode from "vscode";
 
 import { SidebarPanelProvider } from "./providers/sidebarPanel";
+import { ServerManager } from "./services/serverManager";
+
+let serverManager: ServerManager | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
   const getBackendUrl = (): string =>
     vscode.workspace
       .getConfiguration("speak2build")
       .get<string>("backendUrl", "http://127.0.0.1:8000");
+
+  // Automatically start and manage the local backend sidecar process
+  serverManager = new ServerManager(context.extensionUri, getBackendUrl);
+  serverManager.ensureRunning().catch((err) => {
+    console.error("[Speak2Build] Error initializing backend server:", err);
+  });
 
   const provider = new SidebarPanelProvider(
     context.extensionUri,
@@ -64,5 +73,6 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  // Nothing to clean up yet.
+  serverManager?.stop();
+  serverManager = null;
 }

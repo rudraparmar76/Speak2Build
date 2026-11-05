@@ -18,6 +18,9 @@ extension/media/webview/
 *.log
 .DS_Store
 *.vsix
+build/
+*.spec
+extension/bin/
 
 # Piper voice models (downloaded at first use, ~60 MB per voice)
 backend/models/

@@ -113,7 +113,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
-    "package": "vsce package --no-dependencies --skip-license --allow-missing-repository"
+    "package": "npx @vscode/vsce package --no-dependencies --skip-license --allow-missing-repository"
   },
   "dependencies": {
     "react": "^18.3.1",
